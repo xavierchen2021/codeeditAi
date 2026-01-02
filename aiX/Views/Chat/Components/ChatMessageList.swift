@@ -274,7 +274,7 @@ struct ChatMessageList: View {
 
     private var messageListContent: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 10) {
+            LazyVStack(spacing: 16) {
                 ForEach(timelineItems, id: \.stableId) { item in
                     switch item {
                     case .message(let message):

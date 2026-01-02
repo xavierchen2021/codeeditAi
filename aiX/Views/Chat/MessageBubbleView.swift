@@ -57,12 +57,34 @@ struct MessageBubbleView: View {
     var body: some View {
         VStack(alignment: alignment, spacing: 4) {
             if message.role == .agent, let identifier = agentName, shouldShowAgentMessage {
-                HStack(spacing: 4) {
-                    AgentIconView(agent: identifier, size: 16)
-                    Text(agentDisplayName.capitalized)
-                        .font(.system(size: 13, weight: .bold))
+                HStack(spacing: 6) {
+                    AgentIconView(agent: identifier, size: 18)
+                        .background(
+                            Circle()
+                                .fill(Color.blue.opacity(0.1))
+                                .frame(width: 24, height: 24)
+                        )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(agentDisplayName.capitalized)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        if !message.isComplete {
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                Text("正在生成...")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.blue.opacity(0.05))
+                )
             }
 
             // User message bubble
@@ -109,20 +131,31 @@ struct MessageBubbleView: View {
 
             // System message
             else if message.role == .system {
-                Text(message.content)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: true, vertical: false)
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.blue)
+                    Text(message.content)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.blue.opacity(0.08))
+                )
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubbleAlignment)
         .transition(message.role == .agent && !message.isComplete ? .identity : .asymmetric(
-            insertion: .scale(scale: 0.95, anchor: bubbleAlignment == .trailing ? .bottomTrailing : .bottomLeading)
-                .combined(with: .opacity),
-            removal: .opacity
+            insertion: .scale(scale: 0.92, anchor: bubbleAlignment == .trailing ? .bottomTrailing : .bottomLeading)
+                .combined(with: .opacity.combined(with: .move(edge: bubbleAlignment == .trailing ? .trailing : .leading))),
+            removal: .opacity.combined(with: .scale(scale: 0.95))
         ))
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: message.id)
+        .animation(.spring(response: 0.5, dampingFraction: 0.75), value: message.id)
     }
 
     private var agentDisplayName: String {
@@ -135,11 +168,21 @@ struct MessageBubbleView: View {
 
     @ViewBuilder
     private var backgroundView: some View {
-        Color.clear
-            .background(.ultraThinMaterial)
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.blue.opacity(0.85),
+                        Color.blue.opacity(0.7)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .shadow(color: Color.blue.opacity(0.2), radius: 8, x: 0, y: 4)
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.3), lineWidth: 0.5)
+                    .strokeBorder(.white.opacity(0.15), lineWidth: 1)
             }
     }
 
