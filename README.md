@@ -115,9 +115,18 @@ aizen/
 - Core Data for persistence / Core Data 持久化
 - SwiftUI + async/await
 
+## Acknowledgments / 鸣谢
+
+This project is forked from [Aizen by Vivy Technologies](https://github.com/vivy-company/aizen). We are grateful to the original authors and contributors for their excellent work and for open-sourcing this project.
+
+本项目fork自 [Vivy Technologies 的 Aizen](https://github.com/vivy-company/aizen)。感谢原作者及贡献者的优秀工作，以及将项目开源。
+
 ## License / 许可证
 
 GNU General Public License v3.0
 
-Copyright © 2025 Vivy Technologies Co., Limited
-版权所有 © 2025 Vivy Technologies Co., Limited
+Copyright © 2026 Xavier
+版权所有 © 2026 Xavier
+
+Original work Copyright © 2025 Vivy Technologies Co., Limited
+原始作品版权所有 © 2025 Vivy Technologies Co., Limited
