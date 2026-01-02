@@ -50,7 +50,7 @@ mkdir -p "${RESOURCES_DIR}/ghostty/shell-integration"/{bash,elvish,fish,zsh}
 
 # Copy shell integration files from source directory
 # These files are not in Xcode's Copy Bundle Resources, so we copy them directly
-SHELL_INTEGRATION_SRC="${SRCROOT}/aizen/Resources/ghostty/shell-integration"
+SHELL_INTEGRATION_SRC="${SRCROOT}/aiX/Resources/ghostty/shell-integration"
 
 if [ -d "${SHELL_INTEGRATION_SRC}" ]; then
     # Copy zsh integration (including hidden .zshenv)
@@ -118,7 +118,7 @@ for file in "${RESOURCES_DIR}"/*; do
 done
 
 # Copy KaTeX resources for math rendering
-KATEX_SRC="${SRCROOT}/aizen/Resources/katex"
+KATEX_SRC="${SRCROOT}/aiX/Resources/katex"
 if [ -d "${KATEX_SRC}" ]; then
     mkdir -p "${RESOURCES_DIR}/katex"
     cp -a "${KATEX_SRC}/." "${RESOURCES_DIR}/katex/" || {
@@ -128,7 +128,7 @@ if [ -d "${KATEX_SRC}" ]; then
 fi
 
 # Copy KaTeX fonts
-FONTS_SRC="${SRCROOT}/aizen/Resources/fonts"
+FONTS_SRC="${SRCROOT}/aiX/Resources/fonts"
 if [ -d "${FONTS_SRC}" ]; then
     mkdir -p "${RESOURCES_DIR}/fonts"
     for font in "${FONTS_SRC}"/KaTeX_*; do
@@ -141,7 +141,7 @@ if [ -d "${FONTS_SRC}" ]; then
 fi
 
 # Copy Mermaid resources for diagram rendering
-MERMAID_SRC="${SRCROOT}/aizen/Resources/mermaid"
+MERMAID_SRC="${SRCROOT}/aiX/Resources/mermaid"
 if [ -d "${MERMAID_SRC}" ]; then
     mkdir -p "${RESOURCES_DIR}/mermaid"
     cp -a "${MERMAID_SRC}/." "${RESOURCES_DIR}/mermaid/" || {

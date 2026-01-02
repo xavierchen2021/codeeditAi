@@ -17,7 +17,7 @@ BUILD_VERSION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROJECT_FILE="$PROJECT_ROOT/aizen.xcodeproj/project.pbxproj"
+PROJECT_FILE="$PROJECT_ROOT/aiX.xcodeproj/project.pbxproj"
 
 # Validate marketing version format (should be semantic versioning: X.Y.Z)
 if ! echo "$MARKETING_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then

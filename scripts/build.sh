@@ -15,7 +15,7 @@ cd "$PROJECT_DIR"
 CONFIGURATION="Release"
 ARCH="arm64"
 CLEAN=false
-SCHEME="aizen"
+SCHEME='aiX'"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -n|--nightly)
-            SCHEME="aizen nightly"
+            SCHEME='aiX' nightly"
             shift
             ;;
         -c|--clean)
@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Determine app name and version type
-if [[ "$SCHEME" == "aizen nightly" ]]; then
+if [[ "$SCHEME='aiX' nightly" ]]; then
     VERSION_TYPE="nightly (development)"
     APP_NAME="aizen nightly.app"
 else

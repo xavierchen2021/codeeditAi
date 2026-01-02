@@ -23,14 +23,14 @@ Since these are removed from git tracking (no .git folders), they're standalone 
 
 To add them to your Xcode project:
 
-1. Open `aizen.xcodeproj` in Xcode
+1. Open `aiX.xcodeproj` in Xcode
 2. **File** → **Add Package Dependencies...**
 3. Click **"Add Local..."** (bottom left)
 4. Navigate to and select each package:
-   - `/Users/uyakauleu/development/aizen/Packages/CodeEditSourceEditor`
-   - `/Users/uyakauleu/development/aizen/Packages/CodeEditLanguages`
-   - `/Users/uyakauleu/development/aizen/Packages/CodeEditTextView`
-   - `/Users/uyakauleu/development/aizen/Packages/CodeEditSymbols`
+   - `/Users/uyakauleu/development/aiX/Packages/CodeEditSourceEditor`
+   - `/Users/uyakauleu/development/aiX/Packages/CodeEditLanguages`
+   - `/Users/uyakauleu/development/aiX/Packages/CodeEditTextView`
+   - `/Users/uyakauleu/development/aiX/Packages/CodeEditSymbols`
 5. For each, click "Add Package"
 6. Clean Build Folder (Cmd+Shift+K)
 7. Build (Cmd+B)

@@ -1,4 +1,4 @@
-# Aizen
+# aiX
 
 [![macOS](https://img.shields.io/badge/macOS-13.5+-black?logo=apple)](https://github.com/xavierchen2021/codeeditAi)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white)](https://swift.org)
@@ -25,7 +25,7 @@ cd codeeditAi
 
 # Open in Xcode and build
 # 在 Xcode 中打开并构建
-open aizen.xcodeproj
+open aiX.xcodeproj
 ```
 
 To rebuild libghostty at a specific commit:
@@ -89,7 +89,7 @@ Settings > General:
 ## Architecture / 架构
 
 ```
-aizen/
+aiX/
 ├── App/                    # Entry / 入口
 ├── Models/                 # Data models, ACP types / 数据模型、ACP 类型
 ├── Services/
