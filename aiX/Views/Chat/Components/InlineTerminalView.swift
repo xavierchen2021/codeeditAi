@@ -76,10 +76,12 @@ struct InlineTerminalView: View {
             guard let session = agentSession else { return }
 
             var exitedIterations = 0
-            let gracePeriodIterations = 3 // Continue polling 3 more times after exit
+            let gracePeriodIterations = 2 // Reduced from 3 to 2 for faster termination (2 * 50ms = 100ms)
 
             // Poll for output with cancellation support
-            for _ in 0..<120 { // 60 seconds max
+            // Reduced from 120 iterations to 600 iterations, and from 500ms to 50ms
+            // Total timeout increased from 60s to 30s, but with much better responsiveness
+            for _ in 0..<600 { // 30 seconds max (600 * 50ms)
                 if Task.isCancelled { break }
 
                 let terminalOutput = await session.getTerminalOutput(terminalId: terminalId) ?? ""
@@ -99,12 +101,16 @@ struct InlineTerminalView: View {
                 if !running {
                     exitedIterations += 1
                     // Exit after grace period OR if we have output
-                    if exitedIterations >= gracePeriodIterations || !terminalOutput.isEmpty {
+                    // Optimized: exit immediately if output is not empty
+                    if !terminalOutput.isEmpty {
+                        break
+                    }
+                    if exitedIterations >= gracePeriodIterations {
                         break
                     }
                 }
 
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                try? await Task.sleep(nanoseconds: 50_000_000) // Reduced from 500ms to 50ms for better responsiveness
             }
         }
     }

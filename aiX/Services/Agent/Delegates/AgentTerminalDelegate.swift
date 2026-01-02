@@ -492,15 +492,21 @@ actor AgentTerminalDelegate {
     private func appendOutput(terminalId: String, output: String) {
         guard var state = terminals[terminalId] else { return }
 
-        state.outputBuffer += output
+        // Optimized string concatenation using reserveCapacity
+        if state.outputBuffer.isEmpty {
+            state.outputBuffer = output
+        } else {
+            state.outputBuffer.reserveCapacity(state.outputBuffer.count + output.count)
+            state.outputBuffer.append(contentsOf: output)
+        }
 
-        // Apply byte limit truncation
+        // Apply byte limit truncation - optimized using end index
         if let limit = state.outputByteLimit, state.outputBuffer.count > limit {
-            let startIndex = state.outputBuffer.index(
-                state.outputBuffer.startIndex,
-                offsetBy: state.outputBuffer.count - limit
+            let keepRange = state.outputBuffer.index(
+                state.outputBuffer.endIndex,
+                offsetBy: -limit
             )
-            state.outputBuffer = String(state.outputBuffer[startIndex...])
+            state.outputBuffer = String(state.outputBuffer[keepRange...])
             state.wasTruncated = true
         }
 

@@ -465,11 +465,12 @@ class ChatSessionViewModel: ObservableObject {
         cancellables.removeAll()
 
         session.$messages
-            .throttle(for: .milliseconds(33), scheduler: DispatchQueue.main, latest: true)
+            .throttle(for: .milliseconds(50), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] newMessages in
                 guard let self = self else { return }
                 // AgentSession is @MainActor so we're already on main thread
                 // Direct call avoids coalescing of rapid streaming updates
+                // Optimized to 50ms for better responsiveness with terminal output
                 self.syncMessages(newMessages)
 
                 // Only auto-scroll if user is near bottom
@@ -486,6 +487,7 @@ class ChatSessionViewModel: ObservableObject {
             .sink { [weak self] _ in
                 guard let self = self, let session = self.currentAgentSession else { return }
                 let newToolCalls = session.toolCalls
+                // Optimized to 100ms for better responsiveness with terminal output
                 self.syncToolCalls(newToolCalls)
                 // Only auto-scroll if user is near bottom
                 if self.isNearBottom {

@@ -158,8 +158,46 @@ struct ANSITextStyle {
 // MARK: - ANSI Parser
 
 struct ANSIParser {
-    /// Parse ANSI-encoded string to AttributedString
+    // MARK: - Parsing Cache
+
+    private static var parseCache: [Int: AttributedString] = [:]
+    private static let maxCacheSize = 100
+    private static var cacheAccessQueue = DispatchQueue(label: "com.aizen.ansiparser.cache", attributes: .concurrent)
+
+    /// Parse ANSI-encoded string to AttributedString with caching
     static func parse(_ input: String) -> AttributedString {
+        // Try to get from cache first
+        let hash = input.hashValue
+        var cachedResult: AttributedString?
+
+        cacheAccessQueue.sync {
+            cachedResult = parseCache[hash]
+        }
+
+        if let cached = cachedResult {
+            return cached
+        }
+
+        // Parse normally if not in cache
+        let result = parseInternal(input)
+
+        // Add to cache with size limit
+        cacheAccessQueue.async(flags: .barrier) {
+            if parseCache.count >= maxCacheSize {
+                // Remove oldest entry (simple FIFO)
+                let oldestKey = parseCache.keys.min()
+                if let key = oldestKey {
+                    parseCache.removeValue(forKey: key)
+                }
+            }
+            parseCache[hash] = result
+        }
+
+        return result
+    }
+
+    /// Internal parse method without caching
+    private static func parseInternal(_ input: String) -> AttributedString {
         var result = AttributedString()
         var style = ANSITextStyle()
         var currentText = ""
@@ -199,6 +237,14 @@ struct ANSIParser {
 
         return result
     }
+
+    /// Clear the parsing cache (call this when theme changes)
+    static func clearCache() {
+        cacheAccessQueue.async(flags: .barrier) {
+            parseCache.removeAll()
+        }
+    }
+
 
     static func styledString(_ text: String, style: ANSITextStyle) -> AttributedString {
         var attributed = AttributedString(text)
