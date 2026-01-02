@@ -1,61 +1,17 @@
 # Aizen
 
-[English](README.md) | [简体中文](README.zh-CN.md)
-
 [![macOS](https://img.shields.io/badge/macOS-13.5+-black?logo=apple)](https://aizen.win)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![License](https://img.shields.io/badge/License-GPL%203.0-blue)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eKW7GNesuS)
 [![Twitter](https://img.shields.io/badge/Twitter-@aizenwin-1DA1F2?logo=x&logoColor=white)](https://x.com/aizenwin)
 
-> **Early Access** — Aizen is under active development with near-daily updates. Expect breaking changes and new features frequently.
-
-Bring order to your repos. Switch worktrees, not windows.
-
-![Aizen Demo](https://r2.aizen.win/demo.png)
-
-## What is Aizen?
-
-Aizen is a macOS workspace for developers who work on multiple branches in parallel. Each worktree gets its own terminal, file browser, web browser, and agent session — so you switch worktrees, not windows.
-
-## Features
-
-### Core
-- **Workspaces** — Organize repositories into color-coded groups
-- **Worktrees** — Create and manage Git worktrees with visual UI
-- **Per-worktree sessions** — Each worktree has its own terminal, files, browser, and chat
-
-### Terminal
-- **GPU-accelerated** — Powered by [libghostty](https://github.com/ghostty-org/ghostty)
-- **Split panes** — Horizontal and vertical splits
-- **Themes** — Catppuccin, Dracula, Nord, Gruvbox, TokyoNight, and more
-
-### Agents
-- **Supported** — Claude, Codex, Gemini, Kimi, and custom agents
-- **Protocol** — Agent Client Protocol (ACP)
-- **Auto-install** — From NPM or GitHub releases
-- **Voice input** — On-device speech-to-text with waveform visualization
-
-### Git
-- **Operations** — Stage, commit, push, pull, merge, branch
-- **Diff viewer** — Full-window diff with syntax highlighting
-- **Status** — Real-time file status indicators
-
-### File Browser
-- **Tree view** — Hierarchical directory navigation
-- **Syntax highlighting** — Tree-sitter for 50+ languages
-- **Multi-tab** — Open multiple files
-
-### Web Browser
-- **Per-worktree** — Embedded browser for docs and previews
-- **Multi-tab** — Session persistence
-
-## Requirements
+## Requirements / 系统要求
 
 - macOS 13.5+
 - Apple Silicon or Intel Mac
 
-### Building from Source
+### Building from Source / 从源码构建
 
 - Xcode 16.0+
 - Swift 5.0+
@@ -68,30 +24,36 @@ git clone https://github.com/vivy-company/aizen.git
 cd aizen
 
 # Build libghostty (universal arm64 + x86_64)
+# 构建 libghostty（通用 arm64 + x86_64）
 ./scripts/build-libghostty.sh
 
 # Open in Xcode and build
+# 在 Xcode 中打开并构建
 open aizen.xcodeproj
 ```
 
 To rebuild libghostty at a specific commit:
+在指定 commit 重新构建 libghostty：
 ```bash
 ./scripts/build-libghostty.sh <commit-sha>
 ```
 
-## Installation
+## Installation / 安装
 
 Download from [aizen.win](https://aizen.win)
+从 [aizen.win](https://aizen.win) 下载
 
 Signed and notarized with an Apple Developer certificate.
+已使用 Apple 开发者证书签名和公证。
 
-## Configuration
+## Configuration / 配置
 
-### Agents
+### Agents / 代理
 
 Settings > Agents:
+设置 > 代理：
 
-| Agent | Install Method | Package |
+| Agent / 代理 | Install Method / 安装方式 | Package / 包名 |
 |-------|---------------|---------|
 | Claude | NPM | `@anthropic-ai/claude-code` |
 | Codex | GitHub | `openai/codex` |
@@ -99,66 +61,70 @@ Settings > Agents:
 | Kimi | GitHub | `MoonshotAI/kimi-cli` |
 
 Agents can be auto-discovered and installed, or manually configured.
+代理可自动发现和安装，也可手动配置。
 
-### Terminal
+### Terminal / 终端
 
 Settings > Terminal:
-- Font family and size
-- Color theme
+设置 > 终端：
+- Font family and size / 字体和大小
+- Color theme / 配色主题
 
-### Editor
+### Editor / 编辑器
 
 Settings > General:
-- Default external editor (VS Code, Cursor, Sublime Text)
+设置 > 通用：
+- Default external editor / 默认外部编辑器（VS Code、Cursor、Sublime Text）
 
-## Keyboard Shortcuts
+## Keyboard Shortcuts / 快捷键
 
-| Shortcut | Action |
+| Shortcut / 快捷键 | Action / 操作 |
 |----------|--------|
-| `⌘ D` | Split terminal right |
-| `⌘ ⇧ D` | Split terminal down |
-| `⌘ W` | Close pane |
-| `⌘ T` | New tab |
-| `⇧ ⇥` | Cycle chat mode |
-| `ESC` | Interrupt agent |
+| `⌘ D` | Split terminal right / 向右分屏终端 |
+| `⌘ ⇧ D` | Split terminal down / 向下分屏终端 |
+| `⌘ W` | Close pane / 关闭面板 |
+| `⌘ T` | New tab / 新建标签 |
+| `⇧ ⇥` | Cycle chat mode / 切换聊天模式 |
+| `ESC` | Interrupt agent / 中断代理 |
 
-## Dependencies
+## Dependencies / 依赖项
 
-- [libghostty](https://github.com/ghostty-org/ghostty) — Terminal emulator
-- [CodeEdit](https://github.com/CodeEditApp/CodeEdit) packages — Syntax highlighting (Tree-sitter)
-- [Sparkle](https://github.com/sparkle-project/Sparkle) — Auto-updates
+- [libghostty](https://github.com/ghostty-org/ghostty) — Terminal emulator / 终端模拟器
+- [CodeEdit](https://github.com/CodeEditApp/CodeEdit) packages — Syntax highlighting (Tree-sitter) / 语法高亮（Tree-sitter）
+- [Sparkle](https://github.com/sparkle-project/Sparkle) — Auto-updates / 自动更新
 
-## Architecture
+## Architecture / 架构
 
 ```
 aizen/
-├── App/                    # Entry point
-├── Models/                 # Data models, ACP types
+├── App/                    # Entry / 入口
+├── Models/                 # Data models, ACP types / 数据模型、ACP 类型
 ├── Services/
-│   ├── Agent/              # ACP client, installers, session management
-│   ├── Git/                # Worktree, branch, staging, diff services
-│   ├── Audio/              # Voice recording, transcription
-│   └── Highlighting/       # Tree-sitter integration
+│   ├── Agent/              # ACP client, installers, session management / ACP 客户端、安装器、会话管理
+│   ├── Git/                # Worktree, branch, staging, diff services / Worktree、分支、暂存、差异服务
+│   ├── Audio/              # Voice recording, transcription / 语音录制、转写
+│   └── Highlighting/       # Tree-sitter integration / Tree-sitter 集成
 ├── Views/
-│   ├── Workspace/          # Sidebar, create/edit sheets
-│   ├── Worktree/           # List, detail, git sidebar
-│   ├── Terminal/           # Tabs, split layout, panes
-│   ├── Chat/               # Sessions, input, markdown, tool calls
-│   ├── Files/              # Tree view, content tabs
-│   ├── Browser/            # Tabs, controls
-│   └── Settings/           # All settings panels
-├── GhosttyTerminal/        # libghostty wrapper
-└── Utilities/              # Helpers
+│   ├── Workspace/          # Sidebar, create/edit sheets / 侧边栏、创建/编辑弹窗
+│   ├── Worktree/           # List, detail, git sidebar / 列表、详情、Git 侧边栏
+│   ├── Terminal/           # Tabs, split layout, panes / 标签、分屏布局、面板
+│   ├── Chat/               # Sessions, input, markdown, tool calls / 会话、输入、Markdown、工具调用
+│   ├── Files/              # Tree view, content tabs / 树形视图、内容标签
+│   ├── Browser/            # Tabs, controls / 标签、控件
+│   └── Settings/           # All settings panels / 所有设置面板
+├── GhosttyTerminal/        # libghostty wrapper / libghostty 封装
+└── Utilities/              # Helpers / 工具函数
 ```
 
-**Patterns:**
-- MVVM with `@ObservableObject`
-- Actor model for concurrency
-- Core Data for persistence
+**Patterns / 设计模式：**
+- MVVM with `@ObservableObject` / MVVM 配合 `@ObservableObject`
+- Actor model for concurrency / Actor 模型处理并发
+- Core Data for persistence / Core Data 持久化
 - SwiftUI + async/await
 
-## License
+## License / 许可证
 
 GNU General Public License v3.0
 
 Copyright © 2025 Vivy Technologies Co., Limited
+版权所有 © 2025 Vivy Technologies Co., Limited
