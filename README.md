@@ -1,10 +1,8 @@
 # Aizen
 
-[![macOS](https://img.shields.io/badge/macOS-13.5+-black?logo=apple)](https://aizen.win)
+[![macOS](https://img.shields.io/badge/macOS-13.5+-black?logo=apple)](https://github.com/xavierchen2021/codeeditAi)
 [![Swift](https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![License](https://img.shields.io/badge/License-GPL%203.0-blue)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eKW7GNesuS)
-[![Twitter](https://img.shields.io/badge/Twitter-@aizenwin-1DA1F2?logo=x&logoColor=white)](https://x.com/aizenwin)
 
 ## Requirements / 系统要求
 
@@ -15,13 +13,11 @@
 
 - Xcode 16.0+
 - Swift 5.0+
-- Git LFS
 - Zig (for building libghostty): `brew install zig`
 
 ```bash
-git lfs install
-git clone https://github.com/vivy-company/aizen.git
-cd aizen
+git clone https://github.com/xavierchen2021/codeeditAi.git
+cd codeeditAi
 
 # Build libghostty (universal arm64 + x86_64)
 # 构建 libghostty（通用 arm64 + x86_64）
@@ -40,11 +36,8 @@ To rebuild libghostty at a specific commit:
 
 ## Installation / 安装
 
-Download from [aizen.win](https://aizen.win)
-从 [aizen.win](https://aizen.win) 下载
-
-Signed and notarized with an Apple Developer certificate.
-已使用 Apple 开发者证书签名和公证。
+Build from source following the instructions above.
+按照上述说明从源代码构建。
 
 ## Configuration / 配置
 
