@@ -18,7 +18,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>win.aizen.app</string>
+			<string>com.xavierchen.codeeditor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>aizen</string>
@@ -37,10 +37,6 @@
 	<string>Aizen's built-in browser needs access to your microphone for websites that use audio features and for voice message transcription.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Aizen needs access to speech recognition to transcribe your voice messages to text.</string>
-	<key>SUFeedURL</key>
-	<string>https://r2.aizen.win/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>i71fQnr49FNgiXkBf4sKYd5pb7FjxI9HHh7EvJGnc/4=</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
