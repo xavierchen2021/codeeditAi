@@ -1,0 +1,465 @@
+//
+//  AgentSessionNotifications.swift
+//  aizen
+//
+//  Notification handling logic for AgentSession
+//
+
+import Foundation
+import os.log
+import Combine
+
+// MARK: - AgentSession + Notifications
+
+@MainActor
+extension AgentSession {
+    /// Start listening for notifications from the ACP client
+    func startNotificationListener(client: ACPClient) {
+        notificationTask = Task { @MainActor in
+            for await notification in await client.notifications {
+                handleNotification(notification)
+            }
+        }
+    }
+
+    /// Handle incoming session update notifications
+    func handleNotification(_ notification: JSONRPCNotification) {
+        guard notification.method == "session/update" else {
+            return
+        }
+
+        do {
+            let params = notification.params?.value as? [String: Any] ?? [:]
+
+            // Log the update type for debugging
+            if let update = params["update"] as? [String: Any],
+               let updateType = update["sessionUpdate"] as? String {
+                logger.debug("Processing session update: \(updateType)")
+            }
+
+            let data = try JSONSerialization.data(withJSONObject: params)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let updateNotification = try decoder.decode(SessionUpdateNotification.self, from: data)
+
+            // Process update directly - we're already on MainActor from startNotificationListener
+            processUpdate(updateNotification.update)
+        } catch {
+            logger.warning("Failed to parse session update: \(error.localizedDescription)\nRaw params: \(String(describing: notification.params))")
+        }
+    }
+
+    /// Process session update
+    private func processUpdate(_ update: SessionUpdate) {
+        switch update {
+            case .toolCall(let toolCallUpdate):
+                // Mark any in-progress agent message as complete before tool execution
+                markLastMessageComplete()
+
+                // Handle terminal_info meta (experimental Claude Code feature)
+                if let meta = toolCallUpdate._meta,
+                   let terminalInfo = meta["terminal_info"]?.value as? [String: Any],
+                   let terminalIdStr = terminalInfo["terminal_id"] as? String {
+                    // Terminal output will be streamed via terminal_output meta in ToolCallUpdate
+                    logger.debug("Tool call \(toolCallUpdate.toolCallId) has associated terminal: \(terminalIdStr)")
+                }
+
+                // Check if this is a Task (subagent) tool call
+                let isTaskTool = isTaskToolCall(toolCallUpdate)
+
+                // Determine parent for non-Task tool calls
+                // Only assign parent when exactly one Task is active (sequential execution)
+                // For parallel Tasks, we cannot reliably determine which Task spawned which tool
+                var parentId: String? = nil
+                if !isTaskTool && activeTaskIds.count == 1 {
+                    parentId = activeTaskIds.first
+                }
+
+                // Track active Tasks
+                if isTaskTool && toolCallUpdate.status == .pending {
+                    activeTaskIds.append(toolCallUpdate.toolCallId)
+                }
+
+                // Prefer full payload when provided; use readable title fallback
+                let preferredTitle = normalizedTitle(toolCallUpdate.title) ?? derivedTitle(from: toolCallUpdate)
+                var toolCall = toolCallUpdate.asToolCall(
+                    preferredTitle: preferredTitle,
+                    iterationId: currentIterationId,
+                    fallbackTitle: { self.fallbackTitle(kind: $0) }
+                )
+                toolCall.parentToolCallId = parentId
+                updateToolCalls([toolCall])
+            case .toolCallUpdate(let details):
+                let toolCallId = details.toolCallId
+
+                // Extract terminal meta fields if present (experimental Claude Code feature)
+                var terminalOutputContent: [ToolCallContent] = []
+                if let meta = details._meta {
+                    // Handle terminal_output meta
+                    if let terminalOutput = meta["terminal_output"]?.value as? [String: Any],
+                       let outputData = terminalOutput["data"] as? String {
+                        let terminalContent = ToolCallContent.content(.text(TextContent(text: outputData)))
+                        terminalOutputContent.append(terminalContent)
+                    }
+
+                    // Handle terminal_exit meta
+                    if let terminalExit = meta["terminal_exit"]?.value as? [String: Any] {
+                        let exitCode = terminalExit["exit_code"] as? Int
+                        let signal = terminalExit["signal"] as? String
+                        let exitMessage = if let code = exitCode {
+                            "Terminal exited with code \(code)"
+                        } else if let sig = signal {
+                            "Terminal terminated by signal \(sig)"
+                        } else {
+                            "Terminal exited"
+                        }
+                        let exitContent = ToolCallContent.content(.text(TextContent(text: "\n\(exitMessage)\n")))
+                        terminalOutputContent.append(exitContent)
+                    }
+                }
+
+                // Single update combining all changes (avoids state corruption)
+                updateToolCallInPlace(id: toolCallId) { updated in
+                    updated.status = details.status ?? updated.status
+                    updated.locations = details.locations ?? updated.locations
+                    updated.kind = details.kind ?? updated.kind
+                    updated.rawInput = details.rawInput ?? updated.rawInput
+                    updated.rawOutput = details.rawOutput ?? updated.rawOutput
+                    if let newTitle = normalizedTitle(details.title) {
+                        updated.title = newTitle
+                    }
+
+                    // Merge all content: existing + terminal output + regular content
+                    var allContent = updated.content
+                    allContent.append(contentsOf: terminalOutputContent)
+                    if let newContent = details.content {
+                        allContent.append(contentsOf: newContent)
+                    }
+                    updated.content = coalesceAdjacentTextBlocks(allContent)
+                }
+
+                // Clean up activeTaskIds when Task completes
+                if details.status == .completed || details.status == .failed {
+                    activeTaskIds.removeAll { $0 == toolCallId }
+                }
+            case .agentMessageChunk(let block):
+                 currentThought = nil
+                 let (text, blockContent) = textAndContent(from: block)
+                 if text.isEmpty && blockContent.isEmpty {
+                     logger.debug("agentMessageChunk: Empty content, skipping")
+                     break
+                 }
+                 recordAgentChunk()
+
+                 // Find the last agent message (not just last message)
+                 // This prevents system messages (like mode changes) from splitting the stream
+                 let lastAgentIndex = messages.lastIndex { $0.role == .agent }
+                 let lastAgentMessage = lastAgentIndex.map { messages[$0] }
+
+                 if let lastAgentMessage = lastAgentMessage,
+                    !lastAgentMessage.isComplete,
+                    let index = lastAgentIndex {
+                     // Append to existing incomplete agent message
+                     var newContent = lastAgentMessage.content
+                     newContent.append(text)
+                     var newBlocks = lastAgentMessage.contentBlocks
+                     if !blockContent.isEmpty {
+                         newBlocks.append(contentsOf: blockContent)
+                     }
+                     // Update in place - @Published will notify SwiftUI
+                     messages[index] = MessageItem(
+                         id: lastAgentMessage.id,
+                         role: .agent,
+                         content: newContent,
+                         timestamp: lastAgentMessage.timestamp,
+                         toolCalls: lastAgentMessage.toolCalls,
+                         contentBlocks: newBlocks,
+                         isComplete: false,
+                         startTime: lastAgentMessage.startTime,
+                         executionTime: lastAgentMessage.executionTime,
+                         requestId: lastAgentMessage.requestId
+                     )
+                     logger.debug("agentMessageChunk: Updated message at index \(index), new content length: \(newContent.count)")
+                } else {
+                    let initialText = text
+                    let initialBlocks = blockContent
+                    AgentUsageStore.shared.recordAgentMessage(agentId: agentName)
+                    addAgentMessage(initialText, contentBlocks: initialBlocks, isComplete: false, startTime: Date())
+                    logger.debug("agentMessageChunk: Created new agent message with content length: \(initialText.count)")
+                }
+            case .userMessageChunk:
+                break
+            case .agentThoughtChunk(let block):
+                let (text, _) = textAndContent(from: block)
+                if text.isEmpty { break }
+                if let existing = currentThought {
+                    currentThought = existing + text
+                } else {
+                    currentThought = text
+                }
+            case .plan(let plan):
+                // Coalesce plan updates - only update if content changed
+                // This prevents excessive UI rebuilds when multiple agents stream plan updates
+                if agentPlan != plan {
+                    agentPlan = plan
+                }
+            case .availableCommandsUpdate(let commands):
+                availableCommands = commands
+            case .currentModeUpdate(let mode):
+                currentModeId = mode
+                currentMode = SessionMode(rawValue: mode)
+            case .configOptionUpdate(let configOptions):
+                // Store config options for UI rendering
+                // Config options take precedence over legacy modes/models
+                if !configOptions.isEmpty {
+                    // TODO: Update UI to display config options
+                    // For now, just log them
+                    logger.info("Config options updated: \(configOptions.count) options")
+                }
+        }
+    }
+
+    /// Update tool calls with new information (O(1) dictionary operations)
+    func updateToolCalls(_ newToolCalls: [ToolCall]) {
+        for newCall in newToolCalls {
+            let id = newCall.toolCallId
+            if let existing = getToolCall(id: id) {
+                // Merge content instead of replacing entirely
+                let mergedContent = coalesceAdjacentTextBlocks(existing.content + newCall.content)
+                var updated = ToolCall(
+                    toolCallId: id,
+                    title: cleanTitle(newCall.title).isEmpty ? existing.title : cleanTitle(newCall.title),
+                    kind: newCall.kind,
+                    status: newCall.status,
+                    content: mergedContent,
+                    locations: newCall.locations ?? existing.locations,
+                    rawInput: newCall.rawInput ?? existing.rawInput,
+                    rawOutput: newCall.rawOutput ?? existing.rawOutput,
+                    timestamp: existing.timestamp
+                )
+                updated.iterationId = existing.iterationId
+                updated.parentToolCallId = existing.parentToolCallId ?? newCall.parentToolCallId
+                upsertToolCall(updated)
+            } else {
+                // New tool call - add to dictionary and order
+                AgentUsageStore.shared.recordToolCall(agentId: agentName)
+                upsertToolCall(newCall)
+            }
+        }
+    }
+
+    // MARK: - Content Decoding
+
+    
+    private func decodeContentBlocks(_ content: AnyCodable?) -> [ContentBlock] {
+        guard let value = content?.value else { return [] }
+
+        // Log the raw content type for debugging
+        logger.debug("decodeContentBlocks: content type: \(type(of: value))")
+
+        // 1) simple shapes
+        if let string = value as? String {
+            logger.debug("decodeContentBlocks: decoded as string, length: \(string.count)")
+            return [.text(TextContent(text: string))]
+        }
+
+        if let strings = value as? [String] {
+            logger.debug("decodeContentBlocks: decoded as [String], count: \(strings.count)")
+            return [.text(TextContent(text: strings.joined(separator: "\n")))]
+        }
+
+        // 2) try direct decode of standard content blocks
+        if let array = value as? [[String: Any]] {
+            logger.debug("decodeContentBlocks: decoded as [[String:Any]], count: \(array.count)")
+            do {
+                let data = try JSONSerialization.data(withJSONObject: array)
+                return try JSONDecoder().decode([ContentBlock].self, from: data)
+            } catch {
+                logger.warning("decodeContentBlocks: failed to decode ContentBlock array: \(error.localizedDescription)")
+                // Attempt to unwrap MCP-style {"type":"content","content":{...}}
+                let flattened = array.compactMap { dict -> String? in
+                    if let inner = dict["content"] as? [String: Any] {
+                        return extractText(inner["text"])
+                    }
+                    return extractText(dict["text"])
+                }
+                if !flattened.isEmpty {
+                    logger.debug("decodeContentBlocks: flattened to text, length: \(flattened.joined().count)")
+                    return [.text(TextContent(text: flattened.joined()))]
+                }
+            }
+        }
+
+        // 3) single dict
+        if let dict = value as? [String: Any] {
+            logger.debug("decodeContentBlocks: decoded as [String:Any], keys: \(dict.keys.sorted())")
+            if let text = extractText(dict["text"]) {
+                logger.debug("decodeContentBlocks: extracted text, length: \(text.count)")
+                return [.text(TextContent(text: text))]
+            }
+            if let inner = dict["content"] as? [String: Any], let text = extractText(inner["text"]) {
+                logger.debug("decodeContentBlocks: extracted nested text, length: \(text.count)")
+                return [.text(TextContent(text: text))]
+            }
+        }
+
+        logger.warning("decodeContentBlocks: Unable to decode content, value: \(String(describing: value).prefix(500))")
+        return []
+    }
+
+    /// Merge adjacent text blocks to avoid fragment spam from streamed chunks
+    private func coalesceAdjacentTextBlocks(_ blocks: [ContentBlock]) -> [ContentBlock] {
+        var result: [ContentBlock] = []
+
+        for block in blocks {
+            if case .text(let newText) = block, let last = result.last, case .text(let lastText) = last {
+                // Skip exact duplicates
+                if lastText.text == newText.text {
+                    continue
+                }
+                // Replace last with combined text
+                result.removeLast()
+                let combined = TextContent(text: lastText.text + newText.text)
+                result.append(.text(combined))
+            } else {
+                result.append(block)
+            }
+        }
+        return result
+    }
+
+    private func coalesceAdjacentTextBlocks(_ blocks: [ToolCallContent]) -> [ToolCallContent] {
+        var result: [ToolCallContent] = []
+
+        for block in blocks {
+            if case .content(let contentBlock) = block,
+               case .text(let newText) = contentBlock,
+               let last = result.last,
+               case .content(let lastContentBlock) = last,
+               case .text(let lastText) = lastContentBlock {
+                // Skip exact duplicates
+                if lastText.text == newText.text {
+                    continue
+                }
+                // Replace last with combined text
+                result.removeLast()
+                let combined = TextContent(text: lastText.text + newText.text)
+                result.append(.content(.text(combined)))
+            } else {
+                result.append(block)
+            }
+        }
+        return result
+    }
+
+    /// Extract plain text from a content block (best effort)
+    private func textAndContent(from block: ContentBlock) -> (String, [ContentBlock]) {
+        switch block {
+        case .text(let text):
+            return (text.text, [.text(text)])
+        default:
+            return ("", [block])
+        }
+    }
+
+    private func normalizedTitle(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    private func fallbackTitle(kind: ToolKind?) -> String {
+        guard let kind else { return "Tool" }
+        let text = kind.rawValue.replacingOccurrences(of: "_", with: " ")
+        return text.capitalized
+    }
+
+    /// Best-effort human title from tool input payloads
+    private func derivedTitle(from update: ToolCallUpdate) -> String? {
+        guard let raw = update.rawInput?.value as? [String: Any] else { return nil }
+
+        // Common keys agents send
+        let keys = ["path", "file", "filePath", "query", "command", "title", "name", "description"]
+        for key in keys {
+            if let val = raw[key] as? String, !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return val
+            }
+        }
+
+        // If args array exists, join for display
+        if let args = raw["args"] as? [String], !args.isEmpty {
+            return args.joined(separator: " ")
+        }
+
+        return nil
+    }
+
+    private func cleanTitle(_ title: String) -> String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Detect if a tool call is a Task (subagent) via _meta.claudeCode.toolName
+    private func isTaskToolCall(_ update: ToolCallUpdate) -> Bool {
+        guard let meta = update._meta,
+              let claudeCode = meta["claudeCode"]?.value as? [String: Any],
+              let toolName = claudeCode["toolName"] as? String else {
+            return false
+        }
+        return toolName == "Task"
+    }
+
+    /// Extract best-effort string from loosely-typed "text" payloads
+    private func extractText(_ raw: Any?) -> String? {
+        guard let raw else { return nil }
+
+        if let str = raw as? String { return str }
+
+        if let dict = raw as? [String: Any] {
+            // Prefer common output keys
+            let preferredKeys = ["stdout", "stderr", "output", "text", "message", "result"]
+            for key in preferredKeys {
+                if let val = dict[key] as? String {
+                    return val
+                }
+            }
+            // Fallback: pretty-print JSON
+            if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]),
+               let string = String(data: data, encoding: .utf8) {
+                return string
+            }
+        }
+
+        if let array = raw as? [Any],
+           let data = try? JSONSerialization.data(withJSONObject: array, options: [.prettyPrinted]),
+           let string = String(data: data, encoding: .utf8) {
+            return string
+        }
+
+        return String(describing: raw)
+    }
+
+}
+
+private extension ToolCallUpdate {
+    func asToolCall(
+        preferredTitle: String? = nil,
+        iterationId: String? = nil,
+        fallbackTitle: (ToolKind?) -> String = { kind in
+            let text = kind?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "Tool"
+            return text.capitalized
+        }
+    ) -> ToolCall {
+        var call = ToolCall(
+            toolCallId: toolCallId,
+            title: preferredTitle ?? fallbackTitle(kind),
+            kind: kind,
+            status: status,
+            content: content,
+            locations: locations,
+            rawInput: rawInput,
+            rawOutput: rawOutput,
+            timestamp: Date()
+        )
+        call.iterationId = iterationId
+        return call
+    }
+}

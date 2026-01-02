@@ -1,0 +1,233 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: 'Marketing version (e.g., 1.0.6)'
+        required: true
+        type: string
+      build_version:
+        description: 'Build version (e.g., 10006)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes'
+        required: false
+        type: string
+        default: 'Bug fixes and improvements'
+
+env:
+  SCHEME: 'aizen'
+  CONFIGURATION: 'Release'
+
+jobs:
+  build-and-release:
+    runs-on: macos-26
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download libghostty from R2
+        run: |
+          curl -fsSL "${{ secrets.R2_PUBLIC_URL }}/libghostty.tar.gz" -o libghostty.tar.gz
+          tar -xzf libghostty.tar.gz -C Vendor/libghostty/
+          rm libghostty.tar.gz
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Bump version
+        run: |
+          chmod +x scripts/bump-version.sh
+          scripts/bump-version.sh "${{ github.event.inputs.marketing_version }}" "${{ github.event.inputs.build_version }}"
+
+      - name: Install dependencies
+        run: |
+          brew install create-dmg awscli sparkle
+
+      - name: Build and archive app
+        run: |
+          xcodebuild clean archive \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -archivePath build/aizen.xcarchive \
+            -arch arm64 -arch x86_64 \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Export app bundle
+        run: |
+          mkdir -p build/dmg
+          cp -R build/aizen.xcarchive/Products/Applications/aizen.app build/dmg/
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        run: |
+          echo "Code signing certificate found, importing..."
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          echo "${{ secrets.APPLE_CERTIFICATE }}" | base64 --decode > certificate.p12
+          security import certificate.p12 \
+            -k build.keychain \
+            -P "${{ secrets.APPLE_CERT_PASSWORD }}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          rm certificate.p12
+
+      - name: Sign app bundle
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        run: |
+          CERT_IDENTITY=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -1 | grep -o '"[^"]*"' | tr -d '"')
+          echo "Using certificate: $CERT_IDENTITY"
+
+          codesign --force --deep --sign "$CERT_IDENTITY" \
+            --options runtime \
+            --entitlements aizen/aizen.entitlements \
+            build/dmg/aizen.app
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "aizen" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "aizen.app" 200 190 \
+            --hide-extension "aizen.app" \
+            --app-drop-link 600 185 \
+            "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg" \
+            "build/dmg/" || true
+
+          if [ ! -f "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg" ]; then
+            echo "Error: DMG creation failed"
+            exit 1
+          fi
+
+      - name: Sign DMG
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        run: |
+          CERT_IDENTITY=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -1 | grep -o '"[^"]*"' | tr -d '"')
+          codesign --force --sign "$CERT_IDENTITY" \
+            "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg"
+
+      - name: Notarize DMG
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        if: ${{ env.APPLE_CERTIFICATE != '' && env.APPLE_ID != '' && env.APPLE_APP_PASSWORD != '' }}
+        run: |
+          xcrun notarytool submit \
+            "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}" \
+            --wait
+
+      - name: Staple notarization
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        if: ${{ env.APPLE_CERTIFICATE != '' && env.APPLE_ID != '' && env.APPLE_APP_PASSWORD != '' }}
+        run: |
+          xcrun stapler staple "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg"
+
+      - name: Generate Sparkle signature
+        run: |
+          echo "${{ secrets.SPARKLE_PRIVATE_KEY }}" > sparkle_priv.pem
+
+          if [ ! -s sparkle_priv.pem ]; then
+            echo "Error: Private key is empty"
+            exit 1
+          fi
+
+          SIGN_UPDATE=$(find /opt/homebrew/Caskroom/sparkle -name sign_update -type f 2>/dev/null | grep -v old_dsa | grep -v dSYM | head -1)
+
+          if [ -z "$SIGN_UPDATE" ]; then
+            echo "Error: sign_update binary not found"
+            exit 1
+          fi
+
+          SIGNATURE=$("$SIGN_UPDATE" --ed-key-file sparkle_priv.pem -p "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg")
+
+          if [ -z "$SIGNATURE" ]; then
+            echo "Error: sign_update returned empty signature"
+            exit 1
+          fi
+
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+
+      - name: Generate appcast
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          SPARKLE_PRIVATE_KEY_FILE: sparkle_priv.pem
+        run: |
+          chmod +x scripts/generate-appcast.sh
+          scripts/generate-appcast.sh \
+            "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg" \
+            "${{ github.event.inputs.build_version }}" \
+            "${{ github.event.inputs.marketing_version }}" \
+            "${{ github.event.inputs.release_notes }}"
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          aws s3 cp "build/Aizen-${{ github.event.inputs.marketing_version }}.dmg" \
+            "s3://${{ secrets.R2_BUCKET_NAME }}/Aizen-${{ github.event.inputs.marketing_version }}.dmg" \
+            --endpoint-url "${{ secrets.R2_ENDPOINT }}" \
+            --region auto
+
+          aws s3 cp appcast.xml "s3://${{ secrets.R2_BUCKET_NAME }}/appcast.xml" \
+            --endpoint-url "${{ secrets.R2_ENDPOINT }}" \
+            --region auto \
+            --content-type "application/xml"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.marketing_version }}
+          name: Release ${{ github.event.inputs.marketing_version }}
+          body: ${{ github.event.inputs.release_notes }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f sparkle_priv.pem
+          if security list-keychains | grep -q build.keychain; then
+            security delete-keychain build.keychain
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ github.event.inputs.marketing_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build:** ${{ github.event.inputs.build_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **DMG:** ${{ secrets.R2_PUBLIC_URL }}/Aizen-${{ github.event.inputs.marketing_version }}.dmg" >> $GITHUB_STEP_SUMMARY
