@@ -43,6 +43,13 @@ struct WorktreeDetailView: View {
     @State private var cachedTerminalBackgroundColor: Color?
     @State private var showAgentSelectionSheet = false
 
+    // 浮窗状态 - 提升到 WorktreeDetailView 层级，使其在所有标签页都可见
+    @State private var showFloatingPanels = true
+    @State private var showTerminalPanel = false
+    @State private var showFilesPanel = false
+    @State private var showBrowserPanel = false
+    @State private var selectedFloatingButton: Int?
+
     init(worktree: Worktree, repositoryManager: RepositoryManager, tabStateManager: WorktreeTabStateManager, gitChangesContext: Binding<GitChangesContext?>, onWorktreeDeleted: ((Worktree?) -> Void)? = nil) {
         self.worktree = worktree
         self.repositoryManager = repositoryManager
@@ -395,7 +402,8 @@ struct WorktreeDetailView: View {
 
     @ViewBuilder
     private var mainContentWithSidebars: some View {
-        ZStack(alignment: .top) {
+        ZStack(alignment: .topLeading) {
+            // 主内容区域
             contentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(selectedTab == "terminal" ? cachedTerminalBackgroundColor : nil)
@@ -407,6 +415,69 @@ struct WorktreeDetailView: View {
                     navigateToChatSession(sessionId)
                 }
             )
+
+            // 左侧悬浮按钮栏 - 始终显示在所有内容之上
+            if showFloatingPanels {
+                VStack {
+                    floatingButtonBar
+                        .padding(20)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .zIndex(200)  // 确保悬浮按钮始终显示在最上层
+            }
+
+            // 浮窗 - 只在 Chat 标签页时显示
+            if selectedTab == "chat" {
+                // Terminal浮窗
+                if showTerminalPanel {
+                    FloatingPanelView(
+                        title: "Terminal",
+                        icon: "terminal",
+                        isPresented: $showTerminalPanel
+                    ) {
+                        TerminalTabView(
+                            worktree: worktree,
+                            selectedSessionId: $viewModel.selectedTerminalSessionId,
+                            repositoryManager: repositoryManager
+                        )
+                    }
+                    .zIndex(100)
+                }
+
+                // Files浮窗
+                if showFilesPanel {
+                    FloatingPanelView(
+                        title: "Files",
+                        icon: "folder",
+                        isPresented: $showFilesPanel
+                    ) {
+                        FileTabView(
+                            worktree: worktree,
+                            fileToOpenFromSearch: $fileToOpenFromSearch
+                        )
+                    }
+                    .zIndex(100)
+                }
+
+                // Browser浮窗
+                if showBrowserPanel {
+                    FloatingPanelView(
+                        title: "Browser",
+                        icon: "globe",
+                        isPresented: $showBrowserPanel
+                    ) {
+                        BrowserTabView(
+                            worktree: worktree,
+                            selectedSessionId: $viewModel.selectedBrowserSessionId
+                        )
+                    }
+                    .zIndex(100)
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .fileSearchShortcut)) { _ in
+            showFileSearch()
         }
         .onReceive(NotificationCenter.default.publisher(for: .fileSearchShortcut)) { _ in
             showFileSearch()
@@ -648,6 +719,84 @@ struct WorktreeDetailView: View {
         guard let path = worktree.path else { return }
         lastOpenedApp = app
         appDetector.openPath(path, with: app)
+    }
+
+    // MARK: - Floating Button Bar
+
+    private var floatingButtonBar: some View {
+        let selectedIndex: Int? = {
+            if showTerminalPanel { return 0 }
+            if showFilesPanel { return 1 }
+            if showBrowserPanel { return 2 }
+            return nil
+        }()
+
+        return FloatingButtonBar(
+            buttons: [
+                FloatingButton(
+                    icon: "terminal",
+                    title: "Terminal"
+                ) {
+                    handleFloatingButtonTap(panelType: .terminal)
+                },
+                FloatingButton(
+                    icon: "folder",
+                    title: "Files"
+                ) {
+                    handleFloatingButtonTap(panelType: .files)
+                },
+                FloatingButton(
+                    icon: "globe",
+                    title: "Browser"
+                ) {
+                    handleFloatingButtonTap(panelType: .browser)
+                }
+            ],
+            selectedIndex: Binding<Int?>(
+                get: { selectedIndex },
+                set: { _ in }
+            )
+        )
+    }
+
+    private enum FloatingPanelType {
+        case terminal
+        case files
+        case browser
+    }
+
+    private func handleFloatingButtonTap(panelType: FloatingPanelType) {
+        // 如果当前不在 Chat 标签页，先切换到 Chat 标签页
+        if selectedTab != "chat" {
+            selectedTab = "chat"
+        }
+
+        // 切换对应的面板状态
+        withAnimation {
+            switch panelType {
+            case .terminal:
+                showTerminalPanel.toggle()
+                if showTerminalPanel {
+                    // 关闭其他面板
+                    showFilesPanel = false
+                    showBrowserPanel = false
+                }
+            case .files:
+                showFilesPanel.toggle()
+                if showFilesPanel {
+                    // 关闭其他面板
+                    showTerminalPanel = false
+                    showBrowserPanel = false
+                }
+            case .browser:
+                showBrowserPanel.toggle()
+                if showBrowserPanel {
+                    // 关闭其他面板
+                    showTerminalPanel = false
+                    showFilesPanel = false
+                }
+            }
+        }
     }
 }
 

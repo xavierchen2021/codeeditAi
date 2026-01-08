@@ -20,16 +20,6 @@ struct ChatTabView: View {
     @State private var cachedSessionIds: [UUID] = []
     private let maxCachedSessions = 10
 
-    // 浮窗状态
-    @State private var showTerminalPanel = false
-    @State private var showFilesPanel = false
-    @State private var showBrowserPanel = false
-    @State private var selectedFloatingButton: Int?
-
-    // 浮窗内部的会话ID
-    @State private var terminalSessionId: UUID?
-    @State private var browserSessionId: UUID?
-
     @FetchRequest private var sessions: FetchedResults<ChatSession>
 
     init(worktree: Worktree, selectedSessionId: Binding<UUID?>) {
@@ -52,7 +42,7 @@ struct ChatTabView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .top) {
             // 主内容区域
             if sessions.isEmpty {
                 chatEmptyState
@@ -71,61 +61,6 @@ struct ChatTabView: View {
                     .zIndex(isSelected ? 1 : 0)
                 }
             }
-
-            // 左侧悬浮按钮栏 - 始终显示在所有内容之上
-            VStack {
-                floatingButtonBar
-                    .padding(20)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .zIndex(200)  // 确保悬浮按钮始终显示在最上层
-
-            // Terminal浮窗
-            if showTerminalPanel {
-                FloatingPanelView(
-                    title: "Terminal",
-                    icon: "terminal",
-                    isPresented: $showTerminalPanel
-                ) {
-                    TerminalTabView(
-                        worktree: worktree,
-                        selectedSessionId: $terminalSessionId,
-                        repositoryManager: RepositoryManager(viewContext: viewContext)
-                    )
-                }
-                .zIndex(100)
-            }
-
-            // Files浮窗
-            if showFilesPanel {
-                FloatingPanelView(
-                    title: "Files",
-                    icon: "folder",
-                    isPresented: $showFilesPanel
-                ) {
-                    FileTabView(
-                        worktree: worktree,
-                        fileToOpenFromSearch: .constant(nil)
-                    )
-                }
-                .zIndex(100)
-            }
-
-            // Browser浮窗
-            if showBrowserPanel {
-                FloatingPanelView(
-                    title: "Browser",
-                    icon: "globe",
-                    isPresented: $showBrowserPanel
-                ) {
-                    BrowserTabView(
-                        worktree: worktree,
-                        selectedSessionId: $browserSessionId
-                    )
-                }
-                .zIndex(100)
-            }
         }
         .onAppear {
             syncSelectionAndCache()
@@ -136,56 +71,6 @@ struct ChatTabView: View {
         .onChange(of: sessions.count) { _ in
             syncSelectionAndCache()
         }
-    }
-
-    // MARK: - Floating Button Bar
-
-    private var floatingButtonBar: some View {
-        let selectedIndex: Int? = {
-            if showTerminalPanel { return 0 }
-            if showFilesPanel { return 1 }
-            if showBrowserPanel { return 2 }
-            return nil
-        }()
-
-        return FloatingButtonBar(
-            buttons: [
-                FloatingButton(
-                    icon: "terminal",
-                    title: "Terminal"
-                ) {
-                    logger.info("Terminal button clicked, current state: \(showTerminalPanel)")
-                    withAnimation {
-                        showTerminalPanel.toggle()
-                    }
-                    logger.info("Terminal panel state after toggle: \(showTerminalPanel)")
-                },
-                FloatingButton(
-                    icon: "folder",
-                    title: "Files"
-                ) {
-                    logger.info("Files button clicked, current state: \(showFilesPanel)")
-                    withAnimation {
-                        showFilesPanel.toggle()
-                    }
-                    logger.info("Files panel state after toggle: \(showFilesPanel)")
-                },
-                FloatingButton(
-                    icon: "globe",
-                    title: "Browser"
-                ) {
-                    logger.info("Browser button clicked, current state: \(showBrowserPanel)")
-                    withAnimation {
-                        showBrowserPanel.toggle()
-                    }
-                    logger.info("Browser panel state after toggle: \(showBrowserPanel)")
-                }
-            ],
-            selectedIndex: Binding<Int?>(
-                get: { selectedIndex },
-                set: { _ in }  // setter为空，因为我们在按钮action中直接toggle状态
-            )
-        )
     }
 
     private var cachedSessions: [ChatSession] {
