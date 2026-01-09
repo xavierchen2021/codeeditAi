@@ -12,6 +12,23 @@ struct FloatingButtonBar: View {
     let buttons: [FloatingButton]
     @Binding var selectedIndex: Int?
 
+    @State private var currentPosition: CGPoint = .zero
+    @State private var dragOffset: CGSize = .zero
+    @State private var barSize: CGSize = .zero
+
+    private func storageKey() -> String { "floatingButtonBarPosition" }
+
+    private func savePosition() {
+        UserDefaults.standard.set([Double(currentPosition.x), Double(currentPosition.y)], forKey: storageKey())
+    }
+
+    private func loadPosition() {
+        if let arr = UserDefaults.standard.array(forKey: storageKey()) as? [Double], arr.count == 2 {
+            currentPosition.x = CGFloat(arr[0])
+            currentPosition.y = CGFloat(arr[1])
+        }
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             ForEach(Array(buttons.enumerated()), id: \.offset) { index, button in
@@ -29,6 +46,33 @@ struct FloatingButtonBar: View {
         .padding(8)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+        .background(GeometryReader { proxy in
+            Color.clear.onAppear {
+                barSize = proxy.size
+                if currentPosition == .zero { currentPosition = CGPoint(x: 20, y: 20) }
+                loadPosition()
+            }
+        })
+        .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
+        .gesture(
+            DragGesture(minimumDistance: 6)
+                .onChanged { value in
+                    dragOffset = value.translation
+                }
+                .onEnded { value in
+                    currentPosition.x += value.translation.width
+                    currentPosition.y += value.translation.height
+
+                    let screen = NSScreen.main?.visibleFrame ?? .zero
+                    let maxX = max(0, screen.width - barSize.width - 40)
+                    let maxY = max(0, screen.height - barSize.height - 40)
+                    currentPosition.x = max(0, min(currentPosition.x, maxX))
+                    currentPosition.y = max(0, min(currentPosition.y, maxY))
+
+                    dragOffset = .zero
+                    savePosition()
+                }
+        )
     }
 }
 

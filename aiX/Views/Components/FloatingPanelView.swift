@@ -1,25 +1,14 @@
-//
-//  FloatingPanelView.swift
-//  aizen
-//
-//  Created by Aizen AI on 01.01.26.
-//
-
 import SwiftUI
 
-/// 浮窗视图，支持拖拽、最大化和关闭
 struct FloatingPanelView<Content: View>: View {
     let title: String
     let icon: String
     @ViewBuilder let content: Content
     @Binding var isPresented: Bool
 
-    // 拖拽状态
-    @State private var offset = CGSize.zero
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset = CGSize.zero
 
-    // 尺寸状态
     let minWidth: CGFloat
     let idealWidth: CGFloat
     let maxWidth: CGFloat
@@ -27,78 +16,122 @@ struct FloatingPanelView<Content: View>: View {
     let idealHeight: CGFloat
     let maxHeight: CGFloat
 
-    // 最大化状态
+    @State private var currentWidth: CGFloat
+    @State private var currentHeight: CGFloat
+    @State private var resizingStartSize: CGSize = .zero
+    @State private var isResizing = false
+
     @State private var isMaximized = false
     @State private var preMaximizePosition: CGPoint = .zero
     @State private var preMaximizeSize: CGSize = .zero
 
-    // 默认位置（屏幕左中位置）
     private let defaultPosition = CGPoint(x: 120, y: 200)
+
+    private func sizeStorageKey() -> String { "floatingPanelSize.\(title)" }
+
+    private func clampWidth(_ w: CGFloat) -> CGFloat {
+        let maxW = maxWidth.isFinite ? maxWidth : CGFloat.greatestFiniteMagnitude
+        return min(max(w, minWidth), maxW)
+    }
+
+    private func clampHeight(_ h: CGFloat) -> CGFloat {
+        let maxH = maxHeight.isFinite ? maxHeight : CGFloat.greatestFiniteMagnitude
+        return min(max(h, minHeight), maxH)
+    }
+
+    private func saveSize() {
+        UserDefaults.standard.set([Double(currentWidth), Double(currentHeight)], forKey: sizeStorageKey())
+    }
+
+    private func loadSavedSize() {
+        if let arr = UserDefaults.standard.array(forKey: sizeStorageKey()) as? [Double], arr.count == 2 {
+            currentWidth = clampWidth(CGFloat(arr[0]))
+            currentHeight = clampHeight(CGFloat(arr[1]))
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 浮窗主体（使用opacity控制显示/隐藏）
             VStack(spacing: 0) {
-                // 标题栏
                 headerView
                     .frame(height: 36)
                     .background(.ultraThinMaterial)
 
-                // 内容区域
                 content
-                    .frame(
-                        minWidth: isMaximized ? 0 : minWidth,
-                        idealWidth: isMaximized ? .infinity : idealWidth,
-                        maxWidth: isMaximized ? .infinity : maxWidth,
-                        minHeight: isMaximized ? 0 : minHeight,
-                        idealHeight: isMaximized ? .infinity : idealHeight,
-                        maxHeight: isMaximized ? .infinity : maxHeight
-                    )
+                    .frame(minWidth: minWidth, maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity)
                     .clipped()
             }
-            .frame(
-                width: isMaximized ? nil : idealWidth,
-                height: isMaximized ? nil : idealHeight
-            )
+            .frame(width: isMaximized ? nil : currentWidth, height: isMaximized ? nil : currentHeight)
             .frame(maxWidth: isMaximized ? .infinity : nil, maxHeight: isMaximized ? .infinity : nil)
             .background(Color(nsColor: .windowBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: isMaximized ? 0 : 12))
             .shadow(color: .black.opacity(0.3), radius: isMaximized ? 0 : 20, x: 0, y: isMaximized ? 0 : 10)
-            .offset(
-                x: isMaximized ? 0 : (currentPosition.x + dragOffset.width),
-                y: isMaximized ? 0 : (currentPosition.y + dragOffset.height)
-            )
-            .opacity(isPresented ?1 : 0)
-            .scaleEffect(isPresented ?1 : 0.8)
+            .offset(x: isMaximized ? 0 : (currentPosition.x + dragOffset.width), y: isMaximized ? 0 : (currentPosition.y + dragOffset.height))
+            .opacity(isPresented ? 1 : 0)
+            .scaleEffect(isPresented ? 1 : 0.8)
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPresented)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMaximized)
             .allowsHitTesting(isPresented)
             .gesture(
-                DragGesture()
+                DragGesture(minimumDistance: 6)
                     .onChanged { value in
-                        if isPresented && !isMaximized {
+                        if isPresented && !isMaximized && !isResizing {
                             dragOffset = value.translation
                         }
                     }
                     .onEnded { value in
                         if !isPresented || isMaximized { return }
 
-                        // 更新位置
                         currentPosition.x += value.translation.width
                         currentPosition.y += value.translation.height
 
-                        // 限制在屏幕范围内（简单限制）
                         let screen = NSScreen.main?.visibleFrame ?? .zero
-                        currentPosition.x = max(0, min(currentPosition.x, screen.width - idealWidth))
-                        currentPosition.y = max(0, min(currentPosition.y, screen.height - idealHeight))
+                        currentPosition.x = max(0, min(currentPosition.x, screen.width - currentWidth))
+                        currentPosition.y = max(0, min(currentPosition.y, screen.height - currentHeight))
 
                         dragOffset = .zero
                     }
             )
             .onAppear {
-                if currentPosition == .zero {
-                    currentPosition = defaultPosition
+                if currentPosition == .zero { currentPosition = defaultPosition }
+                if currentWidth == 0 { currentWidth = idealWidth }
+                if currentHeight == 0 { currentHeight = idealHeight }
+                loadSavedSize()
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !isMaximized {
+                    ZStack {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 22, height: 22)
+                    .padding(8)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 1)
+                            .onChanged { value in
+                                if !isResizing {
+                                    resizingStartSize = CGSize(width: currentWidth, height: currentHeight)
+                                    isResizing = true
+                                }
+                                let newW = resizingStartSize.width + value.translation.width
+                                let newH = resizingStartSize.height + value.translation.height
+                                currentWidth = clampWidth(newW)
+                                currentHeight = clampHeight(newH)
+                            }
+                            .onEnded { _ in
+                                isResizing = false
+                                saveSize()
+                            }
+                    )
+                    .onHover { hovering in
+                        if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.arrow.pop() }
+                    }
                 }
+            }
+            .onChange(of: isPresented) { presented in
+                if !presented { saveSize() }
             }
         }
     }
@@ -106,7 +139,6 @@ struct FloatingPanelView<Content: View>: View {
     @ViewBuilder
     private var headerView: some View {
         HStack(spacing: 8) {
-            // 图标和标题
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .medium))
@@ -119,10 +151,7 @@ struct FloatingPanelView<Content: View>: View {
 
             Spacer()
 
-            // 最大化/还原按钮
-            Button(action: {
-                toggleMaximize()
-            }) {
+            Button(action: { toggleMaximize() }) {
                 Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
@@ -130,14 +159,10 @@ struct FloatingPanelView<Content: View>: View {
             .buttonStyle(.plain)
             .help(isMaximized ? "Restore" : "Maximize")
 
-            // 关闭按钮
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isPresented = false
-                    // 关闭时还原最大化状态
-                    if isMaximized {
-                        isMaximized = false
-                    }
+                    if isMaximized { isMaximized = false }
                 }
             }) {
                 Image(systemName: "xmark.circle.fill")
@@ -154,28 +179,22 @@ struct FloatingPanelView<Content: View>: View {
     private func toggleMaximize() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             if isMaximized {
-                // 还原
                 isMaximized = false
                 currentPosition = preMaximizePosition
+                currentWidth = preMaximizeSize.width
+                currentHeight = preMaximizeSize.height
             } else {
-                // 最大化
                 preMaximizePosition = currentPosition
+                preMaximizeSize = CGSize(width: currentWidth, height: currentHeight)
                 isMaximized = true
+                currentPosition = .zero
             }
         }
     }
 }
 
-// MARK: - Convenience Initializers
-
 extension FloatingPanelView {
-    /// 使用默认尺寸初始化
-    init(
-        title: String,
-        icon: String,
-        isPresented: Binding<Bool>,
-        @ViewBuilder content: () -> Content
-    ) {
+    init(title: String, icon: String, isPresented: Binding<Bool>, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self._isPresented = isPresented
@@ -186,21 +205,11 @@ extension FloatingPanelView {
         self.minHeight = 300
         self.idealHeight = 400
         self.maxHeight = .infinity
+        self._currentWidth = State(initialValue: 600)
+        self._currentHeight = State(initialValue: 400)
     }
 
-    /// 自定义尺寸初始化
-    init(
-        title: String,
-        icon: String,
-        isPresented: Binding<Bool>,
-        minWidth: CGFloat,
-        idealWidth: CGFloat,
-        maxWidth: CGFloat,
-        minHeight: CGFloat,
-        idealHeight: CGFloat,
-        maxHeight: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) {
+    init(title: String, icon: String, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self._isPresented = isPresented
@@ -211,6 +220,8 @@ extension FloatingPanelView {
         self.minHeight = minHeight
         self.idealHeight = idealHeight
         self.maxHeight = maxHeight
+        self._currentWidth = State(initialValue: idealWidth)
+        self._currentHeight = State(initialValue: idealHeight)
     }
 }
 
@@ -219,11 +230,7 @@ extension FloatingPanelView {
         Color.gray.opacity(0.3)
             .ignoresSafeArea()
 
-        FloatingPanelView(
-            title: "Terminal",
-            icon: "terminal",
-            isPresented: .constant(true)
-        ) {
+        FloatingPanelView(title: "Terminal", icon: "terminal", isPresented: .constant(true)) {
             VStack {
                 Text("Terminal Content")
                     .font(.title)
