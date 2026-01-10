@@ -11,6 +11,7 @@ import os.log
 enum GitPanelTab: String, CaseIterable {
     case git
     case history
+    case graph
     case comments
     case workflows
     case prs
@@ -19,6 +20,7 @@ enum GitPanelTab: String, CaseIterable {
         switch self {
         case .git: return String(localized: "git.panel.git")
         case .history: return String(localized: "git.panel.history")
+        case .graph: return String(localized: "git.panel.graph")
         case .comments: return String(localized: "git.panel.comments")
         case .workflows: return String(localized: "git.panel.workflows")
         case .prs: return String(localized: "git.panel.prs")
@@ -29,6 +31,7 @@ enum GitPanelTab: String, CaseIterable {
         switch self {
         case .git: return "tray.full"
         case .history: return "clock"
+        case .graph: return "point.3.connected.trianglepath.dotted"
         case .comments: return "text.bubble"
         case .workflows: return "bolt.circle"
         case .prs: return "arrow.triangle.merge"
@@ -212,6 +215,14 @@ struct GitPanelWindowContent: View {
             gitTabContent
         case .history:
             GitHistoryView(
+                worktreePath: worktreePath,
+                selectedCommit: selectedHistoryCommit,
+                onSelectCommit: { commit in
+                    selectedHistoryCommit = commit
+                }
+            )
+        case .graph:
+            GitGraphView(
                 worktreePath: worktreePath,
                 selectedCommit: selectedHistoryCommit,
                 onSelectCommit: { commit in

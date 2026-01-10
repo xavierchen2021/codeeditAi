@@ -151,10 +151,11 @@ struct GitPanelWindowContentWithToolbar: View {
                 Spacer().frame(width: 24)
             }
 
-            // Group 2: History, PRs, Workflows
+            // Group 2: History, Graph, PRs, Workflows
             ToolbarItem(placement: .navigation) {
                 Picker("", selection: $selectedTab) {
                     Label(GitPanelTab.history.displayName, systemImage: GitPanelTab.history.icon).tag(GitPanelTab.history)
+                    Label(GitPanelTab.graph.displayName, systemImage: GitPanelTab.graph.icon).tag(GitPanelTab.graph)
                     Label(GitPanelTab.prs.displayName, systemImage: GitPanelTab.prs.icon).tag(GitPanelTab.prs)
                     Label(GitPanelTab.workflows.displayName, systemImage: GitPanelTab.workflows.icon).tag(GitPanelTab.workflows)
                 }
