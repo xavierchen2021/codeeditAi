@@ -14,29 +14,29 @@ struct FloatingButtonBar: View {
     @Binding var activeStates: [Int]  // 活动窗口的索引列表
     @Binding var minimizedStates: [Int]  // 最小化窗口的索引列表
 
-    @State private var currentPosition: CGPoint = .zero
+    @State private var positionOffset: CGSize = .zero
     @State private var dragOffset: CGSize = .zero
     @State private var barSize: CGSize = .zero
 
     private func storageKey() -> String { "floatingButtonBarPosition" }
 
     private func savePosition() {
-        UserDefaults.standard.set([Double(currentPosition.x), Double(currentPosition.y)], forKey: storageKey())
+        UserDefaults.standard.set([Double(positionOffset.width), Double(positionOffset.height)], forKey: storageKey())
     }
 
     private func loadPosition() {
         if let arr = UserDefaults.standard.array(forKey: storageKey()) as? [Double], arr.count == 2 {
-            currentPosition.x = CGFloat(arr[0])
-            currentPosition.y = CGFloat(arr[1])
+            positionOffset.width = CGFloat(arr[0])
+            positionOffset.height = CGFloat(arr[1])
         }
     }
 
-    private func getDefaultPosition() -> CGPoint {
+    private func getDefaultPosition() -> CGSize {
         guard let screen = NSScreen.main?.visibleFrame else {
-            return CGPoint(x: 20, y: 20)
+            return CGSize(width: 20, height: 20)
         }
         // 左侧中间位置
-        return CGPoint(x: 20, y: screen.height / 2)
+        return CGSize(width: 20, height: screen.height / 2)
     }
 
     var body: some View {
@@ -65,27 +65,32 @@ struct FloatingButtonBar: View {
                     dragOffset = value.translation
                 }
                 .onEnded { value in
-                    currentPosition.x += value.translation.width
-                    currentPosition.y += value.translation.height
+                    // 更新最终位置
+                    positionOffset.width += value.translation.width
+                    positionOffset.height += value.translation.height
 
+                    // 边界限制
                     let screen = NSScreen.main?.visibleFrame ?? .zero
-                    // 估算悬浮栏大小：按钮宽度44 + padding 16 * 3 = 68
+                    let defaultPos = getDefaultPosition()
                     let estimatedWidth: CGFloat = 68
                     let estimatedHeight: CGFloat = CGFloat(buttons.count) * 56 + 16
 
-                    let maxX = max(0, screen.width - estimatedWidth)
-                    let maxY = max(0, screen.height - estimatedHeight)
+                    let minX = -defaultPos.width
+                    let maxX = screen.width - defaultPos.width - estimatedWidth
+                    let minY = -defaultPos.height
+                    let maxY = screen.height - defaultPos.height - estimatedHeight
 
-                    currentPosition.x = max(0, min(currentPosition.x, maxX))
-                    currentPosition.y = max(0, min(currentPosition.y, maxY))
+                    positionOffset.width = max(minX, min(positionOffset.width, maxX))
+                    positionOffset.height = max(minY, min(positionOffset.height, maxY))
 
+                    // 重置拖动偏移
                     dragOffset = .zero
                     savePosition()
                 }
         )
-        .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
+        .offset(x: positionOffset.width + dragOffset.width, y: positionOffset.height + dragOffset.height)
         .onAppear {
-            if currentPosition == .zero { currentPosition = getDefaultPosition() }
+            if positionOffset == .zero { positionOffset = getDefaultPosition() }
             loadPosition()
         }
     }
