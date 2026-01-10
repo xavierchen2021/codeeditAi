@@ -110,11 +110,23 @@ struct TerminalViewWrapper: NSViewRepresentable {
         }
 
         // Create new Ghostty terminal
-        // Apply initial command only for the first terminal created in a session
-        // (subsequent splits shouldn't re-run the command)
+        // Apply initial command only for first terminal created in a session
+        // (subsequent splits shouldn't re-run command)
         let isFirstTerminalInSession = sessionManager.getTerminalCount(for: sessionId) == 0
-        let initialCommand = isFirstTerminalInSession ? session.initialCommand : nil
-        Logger.terminal.info("makeNSView: session.id=\(session.id?.uuidString ?? "nil"), paneId=\(paneId), isFirst=\(isFirstTerminalInSession), initialCommand=\(initialCommand ?? "nil")")
+        var initialCommand: String? = nil
+
+        // Check if tmux session exists (for persistence)
+        // If tmux session exists, attach to it instead of running initial command
+        let tmuxSessionExists = TmuxSessionManager.shared.sessionExistsSync(paneId: paneId)
+
+        if isFirstTerminalInSession && !tmuxSessionExists {
+            initialCommand = session.initialCommand
+        } else if tmuxSessionExists {
+            // Attach to existing tmux session
+            initialCommand = TmuxSessionManager.shared.attachOrCreateCommand(paneId: paneId, workingDirectory: path)
+        }
+
+        Logger.terminal.info("makeNSView: session.id=\(session.id?.uuidString ?? "nil"), paneId=\(paneId), isFirst=\(isFirstTerminalInSession), tmuxExists=\(tmuxSessionExists), initialCommand=\(initialCommand ?? "nil")")
         let terminalView = GhosttyTerminalView(
             frame: .zero,
             worktreePath: path,
