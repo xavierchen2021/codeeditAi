@@ -55,7 +55,7 @@ struct FloatingPanelView<Content: View>: View {
             VStack(spacing: 0) {
                 headerView
                     .frame(height: 36)
-                    .background(.ultraThinMaterial)
+                    .background(headerBackground)
 
                 content
                     .frame(minWidth: minWidth, maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity)
@@ -63,7 +63,7 @@ struct FloatingPanelView<Content: View>: View {
             }
             .frame(width: isMaximized ? nil : currentWidth, height: isMaximized ? nil : currentHeight)
             .frame(maxWidth: isMaximized ? .infinity : nil, maxHeight: isMaximized ? .infinity : nil)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(containerBackground)
             .clipShape(RoundedRectangle(cornerRadius: isMaximized ? 0 : 12))
             .shadow(color: .black.opacity(0.3), radius: isMaximized ? 0 : 20, x: 0, y: isMaximized ? 0 : 10)
             .offset(x: isMaximized ? 0 : (currentPosition.x + dragOffset.width), y: isMaximized ? 0 : (currentPosition.y + dragOffset.height))
@@ -189,6 +189,58 @@ struct FloatingPanelView<Content: View>: View {
                 isMaximized = true
                 currentPosition = .zero
             }
+        }
+    }
+
+    // MARK: - Liquid Glass Backgrounds
+
+    @ViewBuilder
+    private var headerBackground: some View {
+        if #available(macOS 26.0, *) {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(.regular, in: Rectangle())
+        } else {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var containerBackground: some View {
+        if #available(macOS 26.0, *) {
+            let shape = RoundedRectangle(cornerRadius: isMaximized ? 0 : 12)
+            shape
+                .fill(.clear)
+                .glassEffect(.regular, in: shape)
+        } else {
+            Color(nsColor: .windowBackgroundColor)
+        }
+    }
+
+    // MARK: - Liquid Glass Background Helpers
+
+    @ViewBuilder
+    private func glassBackground(isMaximized: Bool) -> some View {
+        if #available(macOS 26.0, *) {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(.regular, in: Rectangle())
+        } else {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private func glassContainerBackground(isMaximized: Bool) -> some View {
+        if #available(macOS 26.0, *) {
+            let shape = RoundedRectangle(cornerRadius: isMaximized ? 0 : 12)
+            shape
+                .fill(.clear)
+                .glassEffect(.regular, in: shape)
+        } else {
+            Color(nsColor: .windowBackgroundColor)
         }
     }
 }

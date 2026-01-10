@@ -30,7 +30,7 @@ struct FloatingButtonBar: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        let content = VStack(spacing: 12) {
             ForEach(Array(buttons.enumerated()), id: \.offset) { index, button in
                 FloatingBarButton(
                     icon: button.icon,
@@ -44,35 +44,41 @@ struct FloatingButtonBar: View {
             }
         }
         .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(glassBackground())
         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-        .background(GeometryReader { proxy in
+
+        return GeometryReader { proxy in
             Color.clear.onAppear {
                 barSize = proxy.size
                 if currentPosition == .zero { currentPosition = CGPoint(x: 20, y: 20) }
                 loadPosition()
             }
-        })
-        .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
-        .gesture(
-            DragGesture(minimumDistance: 6)
-                .onChanged { value in
-                    dragOffset = value.translation
-                }
-                .onEnded { value in
-                    currentPosition.x += value.translation.width
-                    currentPosition.y += value.translation.height
+            .overlay(
+                content
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 6)
+                            .onChanged { value in
+                                dragOffset = value.translation
+                            }
+                            .onEnded { value in
+                                currentPosition.x += value.translation.width
+                                currentPosition.y += value.translation.height
 
-                    let screen = NSScreen.main?.visibleFrame ?? .zero
-                    let maxX = max(0, screen.width - barSize.width - 40)
-                    let maxY = max(0, screen.height - barSize.height - 40)
-                    currentPosition.x = max(0, min(currentPosition.x, maxX))
-                    currentPosition.y = max(0, min(currentPosition.y, maxY))
+                                let screen = NSScreen.main?.visibleFrame ?? .zero
+                                let maxX = max(0, screen.width - barSize.width - 40)
+                                let maxY = max(0, screen.height - barSize.height - 40)
+                                currentPosition.x = max(0, min(currentPosition.x, maxX))
+                                currentPosition.y = max(0, min(currentPosition.y, maxY))
 
-                    dragOffset = .zero
-                    savePosition()
-                }
-        )
+                                dragOffset = .zero
+                                savePosition()
+                            }
+                    )
+                    .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
+            )
+        }
+        .frame(width: barSize.width > 0 ? barSize.width : nil, height: barSize.height > 0 ? barSize.height : nil)
     }
 }
 
@@ -89,9 +95,7 @@ struct FloatingBarButton: View {
         Button(action: action) {
             ZStack {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.blue.opacity(0.2))
-                        .frame(width: buttonSize, height: buttonSize)
+                    selectedButtonBackground
                 }
 
                 Image(systemName: icon)
@@ -102,6 +106,37 @@ struct FloatingBarButton: View {
         }
         .buttonStyle(.plain)
         .help(title)
+    }
+
+    @ViewBuilder
+    private var selectedButtonBackground: some View {
+        if #available(macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.clear)
+                .glassEffect(.regular.tint(.accentColor), in: RoundedRectangle(cornerRadius: 10))
+                .frame(width: buttonSize, height: buttonSize)
+        } else {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.blue.opacity(0.2))
+                .frame(width: buttonSize, height: buttonSize)
+        }
+    }
+}
+
+// MARK: - FloatingButtonBar Helpers
+
+extension FloatingButtonBar {
+    @ViewBuilder
+    private func glassBackground() -> some View {
+        if #available(macOS 26.0, *) {
+            let shape = RoundedRectangle(cornerRadius: 12)
+            shape
+                .fill(.clear)
+                .glassEffect(.regular, in: shape)
+        } else {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+        }
     }
 }
 
