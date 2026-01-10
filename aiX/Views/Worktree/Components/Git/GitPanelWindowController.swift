@@ -45,7 +45,8 @@ class GitPanelWindowController: NSWindowController {
             onClose: {
                 window.close()
                 onClose()
-            }
+            },
+            initialTab: context.initialTab
         )
         .navigationSubtitle(worktreePath)
         .modifier(AppearanceModifier())
@@ -102,11 +103,12 @@ struct GitPanelWindowContentWithToolbar: View {
     private var gitStatus: GitStatus { gitRepositoryService.currentStatus }
     private var isOperationPending: Bool { gitRepositoryService.isOperationPending }
 
-    init(context: GitChangesContext, repositoryManager: RepositoryManager, onClose: @escaping () -> Void) {
+    init(context: GitChangesContext, repositoryManager: RepositoryManager, onClose: @escaping () -> Void, initialTab: GitPanelTab = .git) {
         self.context = context
         self.repositoryManager = repositoryManager
         self.onClose = onClose
         self._gitRepositoryService = ObservedObject(wrappedValue: context.service)
+        self._selectedTab = State(initialValue: initialTab)
     }
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "win.aiX", category: "GitPanelToolbar")
@@ -129,12 +131,14 @@ struct GitPanelWindowContentWithToolbar: View {
     }
 
     var body: some View {
-        GitPanelWindowContent(
-            context: context,
-            repositoryManager: repositoryManager,
-            selectedTab: $selectedTab,
-            onClose: onClose
-        )
+        NavigationStack {
+            GitPanelWindowContent(
+                context: context,
+                repositoryManager: repositoryManager,
+                selectedTab: $selectedTab,
+                onClose: onClose
+            )
+        }
         .toolbar {
             // Group 1: Stash (git), Comments
             ToolbarItem(placement: .navigation) {
