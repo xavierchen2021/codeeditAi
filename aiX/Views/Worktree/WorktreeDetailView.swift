@@ -198,100 +198,7 @@ struct WorktreeDetailView: View {
                     }
                 }
 
-                // 添加侧边栏图标
-                if showFloatingPanels {
-                    Divider()
-                        .frame(height: 16)
-                        .padding(.horizontal, 4)
-
-                    Button(action: {
-                        if isPanelMinimized(panelType: .files) {
-                            restorePanel(panelType: .files)
-                        } else if showFilesPanel {
-                            minimizePanel(panelType: .files)
-                        } else {
-                            handleFloatingButtonTap(panelType: .files)
-                        }
-                    }) {
-                        ZStack {
-                            Image(systemName: "folder")
-                            if showFilesPanel || isPanelMinimized(panelType: .files) {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 5, height: 5)
-                                    .offset(x: 8, y: -8)
-                            }
-                        }
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Files")
-
-                    Button(action: {
-                        if isPanelMinimized(panelType: .browser) {
-                            restorePanel(panelType: .browser)
-                        } else if showBrowserPanel {
-                            minimizePanel(panelType: .browser)
-                        } else {
-                            handleFloatingButtonTap(panelType: .browser)
-                        }
-                    }) {
-                        ZStack {
-                            Image(systemName: "globe")
-                            if showBrowserPanel || isPanelMinimized(panelType: .browser) {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 5, height: 5)
-                                    .offset(x: 8, y: -8)
-                            }
-                        }
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Browser")
-
-                    Button(action: {
-                        if isPanelMinimized(panelType: .task) {
-                            restorePanel(panelType: .task)
-                        } else if showTaskPanel {
-                            minimizePanel(panelType: .task)
-                        } else {
-                            handleFloatingButtonTap(panelType: .task)
-                        }
-                    }) {
-                        ZStack {
-                            Image(systemName: "checklist")
-                            if showTaskPanel || isPanelMinimized(panelType: .task) {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 5, height: 5)
-                                    .offset(x: 8, y: -8)
-                            }
-                        }
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Tasks")
-
-                    Button(action: {
-                        if isPanelMinimized(panelType: .git) {
-                            restorePanel(panelType: .git)
-                        } else if showGitPanel {
-                            minimizePanel(panelType: .git)
-                        } else {
-                            handleFloatingButtonTap(panelType: .git)
-                        }
-                    }) {
-                        ZStack {
-                            Image(systemName: "arrow.triangle.branch")
-                            if showGitPanel || isPanelMinimized(panelType: .git) {
-                                Circle()
-                                    .fill(.blue)
-                                    .frame(width: 5, height: 5)
-                                    .offset(x: 8, y: -8)
-                            }
-                        }
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Git")
-                }
+                
             }
         }
     }
@@ -579,16 +486,16 @@ struct WorktreeDetailView: View {
                 }
             )
 
-            // 左侧悬浮按钮栏 - 已移到 Tab 栏,此处隐藏
-            // if showFloatingPanels {
-            //     VStack {
-            //         floatingButtonBar
-            //             .padding(20)
-            //         Spacer()
-            //     }
-            //     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            //     .zIndex(200)  // 确保悬浮按钮始终显示在最上层
-            // }
+            // 左侧悬浮按钮栏
+            if showFloatingPanels {
+                VStack {
+                    floatingButtonBar
+                        .padding(20)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .zIndex(200)  // 确保悬浮按钮始终显示在最上层
+            }
 
             // 浮窗 - 在所有标签页都显示
             // Files浮窗
