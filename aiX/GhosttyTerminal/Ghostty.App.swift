@@ -311,6 +311,9 @@ extension Ghostty {
                 let configContent = """
                 font-family = \(terminalFontName)
                 font-size = \(Int(terminalFontSize))
+                font-spacing = 0
+                font-features = -calt
+                letter-spacing = 0
                 window-inherit-font-size = false
                 window-padding-balance = true
                 window-padding-x = 0

@@ -90,32 +90,52 @@ else
     done
 fi
 
-# Move theme files (files without extensions, not directories, excluding known patterns)
-# Only process potential theme files to avoid iterating over all resources
-THEME_COUNT=0
-shopt -s nullglob
-for file in "${RESOURCES_DIR}"/*; do
-    [ -f "$file" ] || continue
+# Copy theme files from ghostty-themes directory
+THEME_SRC="${SRCROOT}/ghostty-themes"
+if [ -d "${THEME_SRC}" ]; then
+    THEME_COUNT=0
+    for theme_file in "${THEME_SRC}"/*; do
+        [ -f "$theme_file" ] || continue
+        filename=$(basename "$theme_file")
+        
+        # Skip hidden files
+        [[ "$filename" =~ ^\. ]] && continue
+        
+        # Copy theme file to themes directory
+        if cp "$theme_file" "${RESOURCES_DIR}/ghostty/themes/"; then
+            ((THEME_COUNT++))
+        else
+            echo "Warning: Failed to copy theme file: $filename" >&2
+        fi
+    done
+    echo "Theme files copied from source: ${THEME_COUNT} themes"
+else
+    # Fallback: try to move from flattened Resources (legacy behavior)
+    THEME_COUNT=0
+    shopt -s nullglob
+    for file in "${RESOURCES_DIR}"/*; do
+        [ -f "$file" ] || continue
 
-    filename=$(basename "$file")
+        filename=$(basename "$file")
 
-    # Skip files with extensions
-    [[ "$filename" =~ \. ]] && continue
+        # Skip files with extensions
+        [[ "$filename" =~ \. ]] && continue
 
-    # Skip already-moved files and known non-themes
-    case "$filename" in
-        ghostty|xterm-ghostty|ghostty-*|Info|Assets)
-            continue
-            ;;
-    esac
+        # Skip already-moved files and known non-themes
+        case "$filename" in
+            ghostty|xterm-ghostty|ghostty-*|Info|Assets)
+                continue
+                ;;
+        esac
 
-    # Move to themes directory
-    if mv "$file" "${RESOURCES_DIR}/ghostty/themes/"; then
-        ((THEME_COUNT++))
-    else
-        echo "Warning: Failed to move theme file: $filename" >&2
-    fi
-done
+        # Move to themes directory
+        if mv "$file" "${RESOURCES_DIR}/ghostty/themes/"; then
+            ((THEME_COUNT++))
+        else
+            echo "Warning: Failed to move theme file: $filename" >&2
+        fi
+    done
+fi
 
 # Copy KaTeX resources for math rendering
 KATEX_SRC="${SRCROOT}/aiX/Resources/katex"

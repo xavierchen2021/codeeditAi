@@ -45,6 +45,9 @@ struct WorktreeDetailView: View {
     @State private var cachedTerminalBackgroundColor: Color?
     @State private var showAgentSelectionSheet = false
 
+    // Tab 页容器大小，用于悬浮窗口的自动大小计算
+    @State private var tabContainerSize: CGSize = .zero
+
     // 浮窗状态 - 提升到 WorktreeDetailView 层级，使其在所有标签页都可见
     @AppStorage("showFloatingPanels") private var showFloatingPanels = false
     @State private var showTerminalPanel = false
@@ -55,6 +58,8 @@ struct WorktreeDetailView: View {
     @State private var selectedFloatingButton: Int?
     // 最小化窗口的 ID 列表
     @State private var minimizedPanelIds: Set<String> = []
+    // 当前激活的悬浮面板（用于判断点击图标时的行为）
+    @State private var activeFloatingPanel: FloatingPanelType? = nil
 
     init(worktree: Worktree, repositoryManager: RepositoryManager, tabStateManager: WorktreeTabStateManager, gitChangesContext: Binding<GitChangesContext?>, onWorktreeDeleted: ((Worktree?) -> Void)? = nil) {
         self.worktree = worktree
@@ -133,30 +138,38 @@ struct WorktreeDetailView: View {
 
     @ViewBuilder
     var contentView: some View {
-        Group {
-            if selectedTab == "chat" {
-                ChatTabView(
-                    worktree: worktree,
-                    selectedSessionId: $viewModel.selectedChatSessionId
-                )
-            } else if selectedTab == "terminal" {
-                TerminalTabView(
-                    worktree: worktree,
-                    selectedSessionId: $viewModel.selectedTerminalSessionId,
-                    repositoryManager: repositoryManager
-                )
-            } else if selectedTab == "files" {
-                FileTabView(
-                    worktree: worktree,
-                    fileToOpenFromSearch: $fileToOpenFromSearch
-                )
-            } else if selectedTab == "browser" {
-                BrowserTabView(
-                    worktree: worktree,
-                    selectedSessionId: $viewModel.selectedBrowserSessionId
-                )
-            } else if selectedTab == "task" {
-                TasksTabView(worktree: worktree)
+        GeometryReader { geometry in
+            Group {
+                if selectedTab == "chat" {
+                    ChatTabView(
+                        worktree: worktree,
+                        selectedSessionId: $viewModel.selectedChatSessionId
+                    )
+                } else if selectedTab == "terminal" {
+                    TerminalTabView(
+                        worktree: worktree,
+                        selectedSessionId: $viewModel.selectedTerminalSessionId,
+                        repositoryManager: repositoryManager
+                    )
+                } else if selectedTab == "files" {
+                    FileTabView(
+                        worktree: worktree,
+                        fileToOpenFromSearch: $fileToOpenFromSearch
+                    )
+                } else if selectedTab == "browser" {
+                    BrowserTabView(
+                        worktree: worktree,
+                        selectedSessionId: $viewModel.selectedBrowserSessionId
+                    )
+                } else if selectedTab == "task" {
+                    TasksTabView(worktree: worktree)
+                }
+            }
+            .onAppear {
+                tabContainerSize = geometry.size
+            }
+            .onChange(of: geometry.size) { newSize in
+                tabContainerSize = newSize
             }
         }
     }
@@ -172,7 +185,7 @@ struct WorktreeDetailView: View {
                         } label: {
                             ZStack {
                                 Image(systemName: tab.icon)
-                                
+
                                 // 活动窗口指示器（蓝点）
                                 if isTabActive(tab.id) {
                                     Circle()
@@ -185,6 +198,101 @@ struct WorktreeDetailView: View {
                         .labelStyle(.iconOnly)
                         .help(LocalizedStringKey(tab.localizedKey))
                     }
+                }
+
+                // 添加侧边栏图标
+                if showFloatingPanels {
+                    Divider()
+                        .frame(height: 16)
+                        .padding(.horizontal, 4)
+
+                    Button(action: {
+                        if isPanelMinimized(panelType: .files) {
+                            restorePanel(panelType: .files)
+                        } else if showFilesPanel {
+                            minimizePanel(panelType: .files)
+                        } else {
+                            handleFloatingButtonTap(panelType: .files)
+                        }
+                    }) {
+                        ZStack {
+                            Image(systemName: "folder")
+                            if showFilesPanel || isPanelMinimized(panelType: .files) {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 5, height: 5)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("Files")
+
+                    Button(action: {
+                        if isPanelMinimized(panelType: .browser) {
+                            restorePanel(panelType: .browser)
+                        } else if showBrowserPanel {
+                            minimizePanel(panelType: .browser)
+                        } else {
+                            handleFloatingButtonTap(panelType: .browser)
+                        }
+                    }) {
+                        ZStack {
+                            Image(systemName: "globe")
+                            if showBrowserPanel || isPanelMinimized(panelType: .browser) {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 5, height: 5)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("Browser")
+
+                    Button(action: {
+                        if isPanelMinimized(panelType: .task) {
+                            restorePanel(panelType: .task)
+                        } else if showTaskPanel {
+                            minimizePanel(panelType: .task)
+                        } else {
+                            handleFloatingButtonTap(panelType: .task)
+                        }
+                    }) {
+                        ZStack {
+                            Image(systemName: "checklist")
+                            if showTaskPanel || isPanelMinimized(panelType: .task) {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 5, height: 5)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("Tasks")
+
+                    Button(action: {
+                        if isPanelMinimized(panelType: .git) {
+                            restorePanel(panelType: .git)
+                        } else if showGitPanel {
+                            minimizePanel(panelType: .git)
+                        } else {
+                            handleFloatingButtonTap(panelType: .git)
+                        }
+                    }) {
+                        ZStack {
+                            Image(systemName: "arrow.triangle.branch")
+                            if showGitPanel || isPanelMinimized(panelType: .git) {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 5, height: 5)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("Git")
                 }
             }
         }
@@ -332,9 +440,10 @@ struct WorktreeDetailView: View {
             }
         }
 
-        ToolbarItem(placement: .automatic) {
-            gitSidebarButton
-        }
+        // Hidden Git sidebar button
+        // ToolbarItem(placement: .automatic) {
+        //     gitSidebarButton
+        // }
     }
     
     @ViewBuilder
@@ -472,16 +581,16 @@ struct WorktreeDetailView: View {
                 }
             )
 
-            // 左侧悬浮按钮栏 - 始终显示在所有内容之上
-            if showFloatingPanels {
-                VStack {
-                    floatingButtonBar
-                        .padding(20)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .zIndex(200)  // 确保悬浮按钮始终显示在最上层
-            }
+            // 左侧悬浮按钮栏 - 已移到 Tab 栏,此处隐藏
+            // if showFloatingPanels {
+            //     VStack {
+            //         floatingButtonBar
+            //             .padding(20)
+            //         Spacer()
+            //     }
+            //     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            //     .zIndex(200)  // 确保悬浮按钮始终显示在最上层
+            // }
 
             // 浮窗 - 在所有标签页都显示
             // Files浮窗
@@ -493,14 +602,18 @@ struct WorktreeDetailView: View {
                     isPresented: $showFilesPanel,
                     onMinimize: {
                         minimizePanel(panelType: .files)
-                    }
+                    },
+                    onActivate: {
+                        activeFloatingPanel = .files
+                    },
+                    tabContainerSize: tabContainerSize
                 ) {
                     FileTabView(
                         worktree: worktree,
                         fileToOpenFromSearch: $fileToOpenFromSearch
                     )
                 }
-                .zIndex(100)
+                .zIndex(activeFloatingPanel == .files ? 150 : 100)
             }
 
             // Browser浮窗
@@ -512,14 +625,18 @@ struct WorktreeDetailView: View {
                     isPresented: $showBrowserPanel,
                     onMinimize: {
                         minimizePanel(panelType: .browser)
-                    }
+                    },
+                    onActivate: {
+                        activeFloatingPanel = .browser
+                    },
+                    tabContainerSize: tabContainerSize
                 ) {
                     BrowserTabView(
                         worktree: worktree,
                         selectedSessionId: $viewModel.selectedBrowserSessionId
                     )
                 }
-                .zIndex(100)
+                .zIndex(activeFloatingPanel == .browser ? 150 : 100)
             }
 
             // Tasks浮窗
@@ -531,11 +648,15 @@ struct WorktreeDetailView: View {
                     isPresented: $showTaskPanel,
                     onMinimize: {
                         minimizePanel(panelType: .task)
-                    }
+                    },
+                    onActivate: {
+                        activeFloatingPanel = .task
+                    },
+                    tabContainerSize: tabContainerSize
                 ) {
                     TasksTabView(worktree: worktree)
                 }
-                .zIndex(100)
+                .zIndex(activeFloatingPanel == .task ? 150 : 100)
             }
 
             // Git浮窗
@@ -547,7 +668,11 @@ struct WorktreeDetailView: View {
                     isPresented: $showGitPanel,
                     onMinimize: {
                         minimizePanel(panelType: .git)
-                    }
+                    },
+                    onActivate: {
+                        activeFloatingPanel = .git
+                    },
+                    tabContainerSize: tabContainerSize
                 ) {
                     let floatingGitContext = GitChangesContext(worktree: worktree, service: gitRepositoryService)
                     GitPanelWindowContent(
@@ -559,7 +684,7 @@ struct WorktreeDetailView: View {
                         }
                     )
                 }
-                .zIndex(100)
+                .zIndex(activeFloatingPanel == .git ? 150 : 100)
             }
 
             
@@ -678,14 +803,14 @@ struct WorktreeDetailView: View {
     var body: some View {
         NavigationStack {
             navigationContent
+                .navigationTitle("")
         }
     }
 
     @ViewBuilder
     private var contentWithBasicModifiers: some View {
         mainContentWithSidebars
-            .navigationTitle(worktree.branch ?? String(localized: "worktree.session.worktree"))
-            .toolbarBackground(.visible, for: .windowToolbar)
+            .toolbarBackground(.hidden, for: .windowToolbar)
             .toast()
             .onAppear {
                 validateSelectedTab()
@@ -703,12 +828,8 @@ struct WorktreeDetailView: View {
                     sessionToolbarItems
                 }
 
-                if #available(macOS 26.0, *) {
-                    ToolbarSpacer()
-                } else {
-                    ToolbarItem(placement: .automatic) {
-                        Spacer()
-                    }
+                ToolbarItem(placement: .automatic) {
+                    Spacer()
                 }
 
                 trailingToolbarItems
@@ -935,17 +1056,42 @@ struct WorktreeDetailView: View {
     }
 
     private func handleFloatingButtonTap(panelType: FloatingPanelType) {
-        // 切换对应的面板状态，允许同时打开多个窗口
-        withAnimation {
-            switch panelType {
-            case .files:
-                showFilesPanel.toggle()
-            case .browser:
-                showBrowserPanel.toggle()
-            case .task:
-                showTaskPanel.toggle()
-            case .git:
-                showGitPanel.toggle()
+        // 检查当前面板是否已打开
+        let isPanelOpen: Bool
+        switch panelType {
+        case .files: isPanelOpen = showFilesPanel
+        case .browser: isPanelOpen = showBrowserPanel
+        case .task: isPanelOpen = showTaskPanel
+        case .git: isPanelOpen = showGitPanel
+        }
+
+        // 如果面板已打开
+        if isPanelOpen {
+            // 如果面板不是当前激活的面板，则激活它（前置）
+            if activeFloatingPanel != panelType {
+                activeFloatingPanel = panelType
+            } else {
+                // 如果面板已经是当前激活的面板，则隐藏它
+                withAnimation {
+                    switch panelType {
+                    case .files: showFilesPanel = false
+                    case .browser: showBrowserPanel = false
+                    case .task: showTaskPanel = false
+                    case .git: showGitPanel = false
+                    }
+                    activeFloatingPanel = nil
+                }
+            }
+        } else {
+            // 如果面板未打开，则打开它并激活
+            withAnimation {
+                switch panelType {
+                case .files: showFilesPanel = true
+                case .browser: showBrowserPanel = true
+                case .task: showTaskPanel = true
+                case .git: showGitPanel = true
+                }
+                activeFloatingPanel = panelType
             }
         }
     }
@@ -981,7 +1127,7 @@ struct WorktreeDetailView: View {
         }
         minimizedPanelIds.remove(panelId)
 
-        // 显示面板
+        // 显示面板并激活
         withAnimation {
             switch panelType {
             case .files: showFilesPanel = true
@@ -989,6 +1135,7 @@ struct WorktreeDetailView: View {
             case .task: showTaskPanel = true
             case .git: showGitPanel = true
             }
+            activeFloatingPanel = panelType
         }
     }
 

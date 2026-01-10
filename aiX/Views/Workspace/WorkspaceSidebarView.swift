@@ -370,7 +370,6 @@ struct WorkspaceSidebarView: View {
             }
             .background(Color.primary.opacity(0.04))
         }
-        .navigationTitle(LocalizedStringKey("workspace.repositories.title"))
         .sheet(isPresented: $showingWorkspaceSheet) {
             WorkspaceCreateSheet(repositoryManager: repositoryManager)
         }

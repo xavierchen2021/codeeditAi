@@ -119,7 +119,7 @@ struct aizenApp: App {
                     await cleanupOrphanedTmuxSessions()
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1200, height: 800)
         .commands {

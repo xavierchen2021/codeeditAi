@@ -79,16 +79,21 @@ struct BrowserTabView: View {
                             .id(sessionId)
                         } else {
                             emptyTabState
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
 
                     // Show error overlay if there's an error
                     if let error = manager.loadError {
                         errorView(error)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             // Initialize session if empty
             if manager.sessions.isEmpty {

@@ -7,6 +7,8 @@ struct FloatingPanelView<Content: View>: View {
     @ViewBuilder let content: Content
     @Binding var isPresented: Bool
     var onMinimize: (() -> Void)? = nil  // 最小化回调
+    var onActivate: (() -> Void)? = nil  // 激活回调（点击窗口时调用）
+    var tabContainerSize: CGSize = .zero  // Tab 页容器大小，用于计算默认大小
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset = CGSize.zero
@@ -26,6 +28,15 @@ struct FloatingPanelView<Content: View>: View {
     @State private var isMaximized = false
     @State private var preMaximizePosition: CGPoint = .zero
     @State private var preMaximizeSize: CGSize = .zero
+
+    // 容器尺寸，用于计算默认大小
+    @State private var containerSize: CGSize = .zero
+
+    // 根据主题返回阴影颜色
+    private var shadowColor: Color {
+        let appearance = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+        return appearance == .darkAqua ? .white.opacity(0.5) : .blue.opacity(0.5)
+    }
 
     private func defaultPosition(for windowId: String) -> CGPoint {
         // 根据窗口ID生成不同的默认位置，避免重叠
@@ -47,6 +58,29 @@ struct FloatingPanelView<Content: View>: View {
     private func clampHeight(_ h: CGFloat) -> CGFloat {
         let maxH = maxHeight.isFinite ? maxHeight : CGFloat.greatestFiniteMagnitude
         return min(max(h, minHeight), maxH)
+    }
+
+    private func updateSizeForContainer() {
+        // 使用 tabContainerSize 作为容器大小,如果没有提供则使用 containerSize
+        let effectiveContainerSize = tabContainerSize != .zero ? tabContainerSize : containerSize
+
+        // 当容器尺寸变化时，如果窗口是默认大小，则按 80% 比例调整
+        if effectiveContainerSize.width > 0 && effectiveContainerSize.height > 0 {
+            let newWidth = clampWidth(effectiveContainerSize.width * 0.8)
+            let newHeight = clampHeight(effectiveContainerSize.height * 0.8)
+
+            // 只有当当前大小接近理想值（说明是默认大小）时才自动调整
+            let widthRatio = abs(currentWidth - idealWidth) / idealWidth
+            let heightRatio = abs(currentHeight - idealHeight) / idealHeight
+
+            if widthRatio < 0.1 && heightRatio < 0.1 {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentWidth = newWidth
+                    currentHeight = newHeight
+                }
+                saveSize()
+            }
+        }
     }
 
     private func saveSize() {
@@ -72,59 +106,71 @@ struct FloatingPanelView<Content: View>: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
-                headerView
-                    .frame(height: 36)
-                    .background(.ultraThinMaterial)
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 0) {
+                    headerView
+                        .frame(height: 36)
+                        .background(.ultraThinMaterial)
 
-                content
-                    .frame(minWidth: minWidth, maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity)
-                    .clipped()
-            }
-            .frame(width: isMaximized ? nil : currentWidth, height: isMaximized ? nil : currentHeight)
-            .frame(maxWidth: isMaximized ? .infinity : nil, maxHeight: isMaximized ? .infinity : nil)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: isMaximized ? 0 : 12))
-            .shadow(color: .black.opacity(0.3), radius: isMaximized ? 0 : 20, x: 0, y: isMaximized ? 0 : 10)
-            .offset(x: isMaximized ? 0 : (currentPosition.x + dragOffset.width), y: isMaximized ? 0 : (currentPosition.y + dragOffset.height))
-            .opacity(isPresented ? 1 : 0)
-            .scaleEffect(isPresented ? 1 : 0.8)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPresented)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMaximized)
-            .allowsHitTesting(isPresented)
-            .gesture(
-                DragGesture(minimumDistance: 6)
-                    .onChanged { value in
-                        if isPresented && !isMaximized && !isResizing {
-                            dragOffset = value.translation
-                        }
-                    }
-                    .onEnded { value in
-                        if !isPresented || isMaximized { return }
-
-                        currentPosition.x += value.translation.width
-                        currentPosition.y += value.translation.height
-
-                        let screen = NSScreen.main?.visibleFrame ?? .zero
-                        currentPosition.x = max(0, min(currentPosition.x, screen.width - currentWidth))
-                        currentPosition.y = max(0, min(currentPosition.y, screen.height - currentHeight))
-
-                        dragOffset = .zero
-                        savePosition()
-                    }
-            )
-            .onAppear {
-                if currentWidth == 0 { currentWidth = idealWidth }
-                if currentHeight == 0 { currentHeight = idealHeight }
-                loadSavedSize()
-                if currentPosition == .zero {
-                    currentPosition = defaultPosition(for: windowId)
-                    loadSavedPosition()
+                    content
+                        .frame(minWidth: minWidth, maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity)
+                        .clipped()
                 }
-            }
-            .onChange(of: isPresented) { presented in
-                if !presented { saveSize() }
+                .frame(width: isMaximized ? nil : currentWidth, height: isMaximized ? nil : currentHeight)
+                .frame(maxWidth: isMaximized ? .infinity : nil, maxHeight: isMaximized ? .infinity : nil)
+                .background(Color(nsColor: .windowBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: isMaximized ? 0 : 12))
+                .shadow(color: shadowColor, radius: isMaximized ? 0 : 20, x: 0, y: isMaximized ? 0 : 10)
+                .offset(x: isMaximized ? 0 : (currentPosition.x + dragOffset.width), y: isMaximized ? 0 : (currentPosition.y + dragOffset.height))
+                .opacity(isPresented ? 1 : 0)
+                .scaleEffect(isPresented ? 1 : 0.8)
+                .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPresented)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMaximized)
+                .allowsHitTesting(isPresented)
+                .gesture(
+                    DragGesture(minimumDistance: 6)
+                        .onChanged { value in
+                            if isPresented && !isMaximized && !isResizing {
+                                dragOffset = value.translation
+                            }
+                        }
+                        .onEnded { value in
+                            if !isPresented || isMaximized { return }
+
+                            currentPosition.x += value.translation.width
+                            currentPosition.y += value.translation.height
+
+                            let screen = NSScreen.main?.visibleFrame ?? .zero
+                            currentPosition.x = max(0, min(currentPosition.x, screen.width - currentWidth))
+                            currentPosition.y = max(0, min(currentPosition.y, screen.height - currentHeight))
+
+                            dragOffset = .zero
+                            savePosition()
+                        }
+                )
+                .onAppear {
+                    if currentWidth == 0 { currentWidth = idealWidth }
+                    if currentHeight == 0 { currentHeight = idealHeight }
+                    loadSavedSize()
+                    if currentPosition == .zero {
+                        currentPosition = defaultPosition(for: windowId)
+                        loadSavedPosition()
+                    }
+                    // 初始化容器尺寸
+                    containerSize = geometry.size
+                    updateSizeForContainer()
+                }
+                .onChange(of: isPresented) { presented in
+                    if !presented { saveSize() }
+                }
+                .onChange(of: geometry.size) { newSize in
+                    // 监听容器尺寸变化
+                    if containerSize != newSize {
+                        containerSize = newSize
+                        updateSizeForContainer()
+                    }
+                }
             }
         }
     }
@@ -199,12 +245,14 @@ struct FloatingPanelView<Content: View>: View {
 }
 
 extension FloatingPanelView {
-    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, onMinimize: (() -> Void)? = nil, onActivate: (() -> Void)? = nil, tabContainerSize: CGSize = .zero, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.windowId = windowId
         self._isPresented = isPresented
         self.onMinimize = onMinimize
+        self.onActivate = onActivate
+        self.tabContainerSize = tabContainerSize
         self.content = content()
         self.minWidth = 400
         self.idealWidth = 600
@@ -216,12 +264,14 @@ extension FloatingPanelView {
         self._currentHeight = State(initialValue: 400)
     }
 
-    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, onMinimize: (() -> Void)? = nil, onActivate: (() -> Void)? = nil, tabContainerSize: CGSize = .zero, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.windowId = windowId
         self._isPresented = isPresented
         self.onMinimize = onMinimize
+        self.onActivate = onActivate
+        self.tabContainerSize = tabContainerSize
         self.content = content()
         self.minWidth = minWidth
         self.idealWidth = idealWidth

@@ -42,11 +42,45 @@ struct TerminalSettingsView: View {
 
     private func loadSystemFonts() -> [String] {
         let fontManager = NSFontManager.shared
+        
+        // 首先加载所有等宽字体（终端推荐）
         let monospaceFonts = fontManager.availableFontFamilies.filter { familyName in
             guard let font = NSFont(name: familyName, size: 12) else { return false }
             return font.isFixedPitch
         }
-        return monospaceFonts.sorted()
+        
+        // 添加一些常用的等宽字体（确保它们在列表中）
+        let commonMonospaceFonts = [
+            "Menlo", "Monaco", "Courier New", "Courier", 
+            "SF Mono", "SF Pro Text", "SF Pro Display",
+            "Source Code Pro", "Fira Code", "JetBrains Mono",
+            "Hack", "Ubuntu Mono", "Consolas", "Lucida Console",
+            "DejaVu Sans Mono", "Liberation Mono", "Inconsolata",
+            "Roboto Mono", "PT Mono", "Oxygen Mono"
+        ]
+        
+        // 合并并去重，保持等宽字体优先
+        var allFonts = Set<String>()
+        
+        // 先添加常用等宽字体
+        for font in commonMonospaceFonts {
+            if fontManager.availableFontFamilies.contains(font) {
+                allFonts.insert(font)
+            }
+        }
+        
+        // 再添加所有等宽字体
+        for font in monospaceFonts {
+            allFonts.insert(font)
+        }
+        
+        // 最后添加其他字体（可选，如果用户想用非等宽字体）
+        let allAvailableFonts = fontManager.availableFontFamilies
+        for font in allAvailableFonts {
+            allFonts.insert(font)
+        }
+        
+        return Array(allFonts).sorted()
     }
 
     private func loadThemeNames() -> [String] {
@@ -55,18 +89,31 @@ struct TerminalSettingsView: View {
             return []
         }
 
+        logger.info("Loading themes from: \(themesPath)")
+
         guard let themeFiles = try? FileManager.default.contentsOfDirectory(atPath: themesPath) else {
             logger.error("Unable to read themes from \(themesPath)")
             return []
         }
 
+        logger.info("Found \(themeFiles.count) files in themes directory")
+
         // Filter out directories and hidden files
-        return themeFiles.filter { file in
+        let themes = themeFiles.filter { file in
             let path = (themesPath as NSString).appendingPathComponent(file)
             var isDir: ObjCBool = false
-            FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
-            return !isDir.boolValue && !file.hasPrefix(".")
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+            let isFile = exists && !isDir.boolValue
+            let isNotHidden = !file.hasPrefix(".")
+            let result = isFile && isNotHidden
+            if !result {
+                logger.debug("Skipping: \(file) - exists: \(exists), isDir: \(isDir.boolValue), isHidden: \(file.hasPrefix("."))")
+            }
+            return result
         }.sorted()
+
+        logger.info("Loaded \(themes.count) themes: \(themes.prefix(10).joined(separator: ", "))\(themes.count > 10 ? "..." : "")")
+        return themes
     }
 
     var body: some View {
