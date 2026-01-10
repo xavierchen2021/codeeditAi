@@ -370,6 +370,7 @@ struct WorktreeDetailView: View {
     var leadingToolbarItems: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             HStack(spacing: 12) {
+                gitGraphButton
                 zenModeButton
             }
         }
@@ -386,11 +387,28 @@ struct WorktreeDetailView: View {
         }
         .labelStyle(.iconOnly)
         .help(zenModeEnabled ? "Show Worktree List" : "Hide Worktree List (Zen Mode)")
-        
+
         if #available(macOS 14.0, *) {
             button.symbolEffect(.bounce, value: zenModeEnabled)
         } else {
             button
+        }
+    }
+
+    @ViewBuilder
+    private var gitGraphButton: some View {
+        Button(action: {
+            openGitGraphPanel()
+        }) {
+            Label("Git Graph", systemImage: "point.3.connected.trianglepath.dotted")
+        }
+        .labelStyle(.iconOnly)
+        .help("Open Git Graph View")
+    }
+
+    private func openGitGraphPanel() {
+        if gitChangesContext == nil {
+            gitChangesContext = GitChangesContext(worktree: worktree, service: gitRepositoryService, initialTab: .graph)
         }
     }
 

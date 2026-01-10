@@ -99,6 +99,13 @@ struct GitChangesContext: Identifiable, Equatable {
     let id = UUID()
     let worktree: Worktree
     let service: GitRepositoryService
+    let initialTab: GitPanelTab
+
+    init(worktree: Worktree, service: GitRepositoryService, initialTab: GitPanelTab = .git) {
+        self.worktree = worktree
+        self.service = service
+        self.initialTab = initialTab
+    }
 
     static func == (lhs: GitChangesContext, rhs: GitChangesContext) -> Bool {
         lhs.id == rhs.id
