@@ -162,6 +162,16 @@ struct WorktreeListView: View {
                         Label(String(localized: "worktree.list.add"), systemImage: "plus")
                     }
                 }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        Task {
+                            try? await repositoryManager.scanWorktrees(for: repository)
+                        }
+                    } label: {
+                        Label(String(localized: "worktree.list.refresh"), systemImage: "arrow.clockwise")
+                    }
+                    .help("Refresh worktree list")
+                }
             }
         }
         .sheet(isPresented: $showingCreateWorktree) {
