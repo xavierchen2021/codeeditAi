@@ -22,7 +22,7 @@ actor GitGraphService {
         let commits = try await fetchCommitsWithParents(at: repoPath, limit: limit)
 
         // Build graph layout
-        let graphCommits = buildGraphLayout(commits: commits)
+        let graphCommits = await buildGraphLayout(commits: commits)
 
         return graphCommits
     }
@@ -37,7 +37,7 @@ actor GitGraphService {
     }
 
     /// Build graph layout with track assignment
-    private func buildGraphLayout(commits: [Libgit2CommitInfo]) -> [GitGraphCommit] {
+    private func buildGraphLayout(commits: [Libgit2CommitInfo]) async -> [GitGraphCommit] {
         guard !commits.isEmpty else { return [] }
 
         var graphCommits: [GitGraphCommit] = []
