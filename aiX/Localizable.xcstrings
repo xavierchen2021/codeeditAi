@@ -6833,6 +6833,23 @@
         }
       }
     },
+    "git.panel.graph" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graph"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地铁线"
+          }
+        }
+      }
+    },
     "git.sendToAgent.activeChats" : {
       "extractionState" : "manual",
       "localizations" : {
