@@ -481,15 +481,8 @@ struct WorktreeDetailView: View {
                 FloatingPanelView(
                     title: "Files",
                     icon: "folder",
-                    isPresented: $showFilesPanel,
-                    onMinimize: {
-                        minimizedWindowsManager.add(
-                            title: "Files",
-                            icon: "folder",
-                            onRestore: { showFilesPanel = true },
-                            onClose: { showFilesPanel = false }
-                        )
-                    }
+                    windowId: "floating-files-\(worktree.id?.uuidString ?? "")",
+                    isPresented: $showFilesPanel
                 ) {
                     FileTabView(
                         worktree: worktree,
@@ -504,15 +497,8 @@ struct WorktreeDetailView: View {
                 FloatingPanelView(
                     title: "Browser",
                     icon: "globe",
-                    isPresented: $showBrowserPanel,
-                    onMinimize: {
-                        minimizedWindowsManager.add(
-                            title: "Browser",
-                            icon: "globe",
-                            onRestore: { showBrowserPanel = true },
-                            onClose: { showBrowserPanel = false }
-                        )
-                    }
+                    windowId: "floating-browser-\(worktree.id?.uuidString ?? "")",
+                    isPresented: $showBrowserPanel
                 ) {
                     BrowserTabView(
                         worktree: worktree,
@@ -527,15 +513,8 @@ struct WorktreeDetailView: View {
                 FloatingPanelView(
                     title: "Tasks",
                     icon: "checklist",
-                    isPresented: $showTaskPanel,
-                    onMinimize: {
-                        minimizedWindowsManager.add(
-                            title: "Tasks",
-                            icon: "checklist",
-                            onRestore: { showTaskPanel = true },
-                            onClose: { showTaskPanel = false }
-                        )
-                    }
+                    windowId: "floating-tasks-\(worktree.id?.uuidString ?? "")",
+                    isPresented: $showTaskPanel
                 ) {
                     TasksTabView(worktree: worktree)
                 }
@@ -547,15 +526,8 @@ struct WorktreeDetailView: View {
                 FloatingPanelView(
                     title: "Git",
                     icon: "arrow.triangle.branch",
-                    isPresented: $showGitPanel,
-                    onMinimize: {
-                        minimizedWindowsManager.add(
-                            title: "Git",
-                            icon: "arrow.triangle.branch",
-                            onRestore: { showGitPanel = true },
-                            onClose: { showGitPanel = false }
-                        )
-                    }
+                    windowId: "floating-git-\(worktree.id?.uuidString ?? "")",
+                    isPresented: $showGitPanel
                 ) {
                     let floatingGitContext = GitChangesContext(worktree: worktree, service: gitRepositoryService)
                     GitPanelWindowContent(
@@ -570,12 +542,7 @@ struct WorktreeDetailView: View {
                 .zIndex(100)
             }
 
-            // 最小化窗口栏 - 显示在底部
-            VStack {
-                Spacer()
-                MinimizedWindowsBar(manager: minimizedWindowsManager)
-            }
-            .zIndex(300)
+            
         }
         .onReceive(NotificationCenter.default.publisher(for: .fileSearchShortcut)) { _ in
             showFileSearch()
@@ -851,6 +818,7 @@ struct WorktreeDetailView: View {
 
     private var floatingButtonBar: some View {
         let selectedIndex: Int? = {
+            // 返回第一个打开的窗口的索引，如果没有窗口打开则返回 nil
             if showFilesPanel { return 0 }
             if showBrowserPanel { return 1 }
             if showTaskPanel { return 2 }
@@ -888,6 +856,17 @@ struct WorktreeDetailView: View {
             selectedIndex: Binding<Int?>(
                 get: { selectedIndex },
                 set: { _ in }
+            ),
+            activeStates: Binding<[Int]>(
+                get: {
+                    var active: [Int] = []
+                    if showFilesPanel { active.append(0) }
+                    if showBrowserPanel { active.append(1) }
+                    if showTaskPanel { active.append(2) }
+                    if showGitPanel { active.append(3) }
+                    return active
+                },
+                set: { _ in }
             )
         )
     }
@@ -900,41 +879,17 @@ struct WorktreeDetailView: View {
     }
 
     private func handleFloatingButtonTap(panelType: FloatingPanelType) {
-        // 切换对应的面板状态
+        // 切换对应的面板状态，允许同时打开多个窗口
         withAnimation {
             switch panelType {
             case .files:
                 showFilesPanel.toggle()
-                if showFilesPanel {
-                    // 关闭其他面板
-                    showBrowserPanel = false
-                    showTaskPanel = false
-                    showGitPanel = false
-                }
             case .browser:
                 showBrowserPanel.toggle()
-                if showBrowserPanel {
-                    // 关闭其他面板
-                    showFilesPanel = false
-                    showTaskPanel = false
-                    showGitPanel = false
-                }
             case .task:
                 showTaskPanel.toggle()
-                if showTaskPanel {
-                    // 关闭其他面板
-                    showFilesPanel = false
-                    showBrowserPanel = false
-                    showGitPanel = false
-                }
             case .git:
                 showGitPanel.toggle()
-                if showGitPanel {
-                    // 关闭其他面板
-                    showFilesPanel = false
-                    showBrowserPanel = false
-                    showTaskPanel = false
-                }
             }
         }
     }

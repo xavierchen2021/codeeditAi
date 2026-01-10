@@ -11,6 +11,7 @@ import SwiftUI
 struct FloatingButtonBar: View {
     let buttons: [FloatingButton]
     @Binding var selectedIndex: Int?
+    @Binding var activeStates: [Int]  // 活动窗口的索引列表
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset: CGSize = .zero
@@ -44,6 +45,7 @@ struct FloatingButtonBar: View {
                     icon: button.icon,
                     title: button.title,
                     isSelected: selectedIndex == index,
+                    isActive: activeStates.contains(index),
                     action: {
                         selectedIndex = index
                         button.action()
@@ -92,6 +94,7 @@ struct FloatingBarButton: View {
     let icon: String
     let title: String
     let isSelected: Bool
+    let isActive: Bool  // 窗口是否处于活动状态（打开）
     let action: () -> Void
 
     private let buttonSize: CGFloat = 44
@@ -107,12 +110,20 @@ struct FloatingBarButton: View {
 
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(isSelected ? .blue : .secondary)
+                    .foregroundStyle(isSelected ? .blue : (isActive ? .primary : .secondary))
                     .frame(width: buttonSize, height: buttonSize)
+
+                // 活动窗口指示器（小圆点）
+                if isActive {
+                    Circle()
+                        .fill(.blue)
+                        .frame(width: 6, height: 6)
+                        .offset(x: buttonSize / 2 - 8, y: -buttonSize / 2 + 8)
+                }
             }
         }
         .buttonStyle(.plain)
-        .help(title)
+        .help(isActive ? "\(title) (点击最小化)" : "\(title) (点击展开)")
     }
 }
 
@@ -134,7 +145,8 @@ struct FloatingButton {
                 FloatingButton(icon: "folder", title: "Files") {},
                 FloatingButton(icon: "globe", title: "Browser") {}
             ],
-            selectedIndex: .constant(nil)
+            selectedIndex: .constant(nil),
+            activeStates: .constant([1, 2])
         )
     }
 }

@@ -3,9 +3,9 @@ import SwiftUI
 struct FloatingPanelView<Content: View>: View {
     let title: String
     let icon: String
+    let windowId: String  // 窗口唯一标识符，用于独立存储位置
     @ViewBuilder let content: Content
     @Binding var isPresented: Bool
-    var onMinimize: (() -> Void)?
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset = CGSize.zero
@@ -26,9 +26,17 @@ struct FloatingPanelView<Content: View>: View {
     @State private var preMaximizePosition: CGPoint = .zero
     @State private var preMaximizeSize: CGSize = .zero
 
-    private let defaultPosition = CGPoint(x: 120, y: 200)
+    private func defaultPosition(for windowId: String) -> CGPoint {
+        // 根据窗口ID生成不同的默认位置，避免重叠
+        let baseX: CGFloat = 120
+        let baseY: CGFloat = 200
+        let offsetX: CGFloat = CGFloat(abs(windowId.hashValue % 3)) * 40
+        let offsetY: CGFloat = CGFloat(abs(windowId.hashValue % 3)) * 40
+        return CGPoint(x: baseX + offsetX, y: baseY + offsetY)
+    }
 
-    private func sizeStorageKey() -> String { "floatingPanelSize.\(title)" }
+    private func sizeStorageKey() -> String { "floatingPanelSize.\(windowId)" }
+    private func positionStorageKey() -> String { "floatingPanelPosition.\(windowId)" }
 
     private func clampWidth(_ w: CGFloat) -> CGFloat {
         let maxW = maxWidth.isFinite ? maxWidth : CGFloat.greatestFiniteMagnitude
@@ -48,6 +56,17 @@ struct FloatingPanelView<Content: View>: View {
         if let arr = UserDefaults.standard.array(forKey: sizeStorageKey()) as? [Double], arr.count == 2 {
             currentWidth = clampWidth(CGFloat(arr[0]))
             currentHeight = clampHeight(CGFloat(arr[1]))
+        }
+    }
+
+    private func savePosition() {
+        UserDefaults.standard.set([Double(currentPosition.x), Double(currentPosition.y)], forKey: positionStorageKey())
+    }
+
+    private func loadSavedPosition() {
+        if let arr = UserDefaults.standard.array(forKey: positionStorageKey()) as? [Double], arr.count == 2 {
+            currentPosition.x = CGFloat(arr[0])
+            currentPosition.y = CGFloat(arr[1])
         }
     }
 
@@ -91,13 +110,17 @@ struct FloatingPanelView<Content: View>: View {
                         currentPosition.y = max(0, min(currentPosition.y, screen.height - currentHeight))
 
                         dragOffset = .zero
+                        savePosition()
                     }
             )
             .onAppear {
-                if currentPosition == .zero { currentPosition = defaultPosition }
                 if currentWidth == 0 { currentWidth = idealWidth }
                 if currentHeight == 0 { currentHeight = idealHeight }
                 loadSavedSize()
+                if currentPosition == .zero {
+                    currentPosition = defaultPosition(for: windowId)
+                    loadSavedPosition()
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 if !isMaximized {
@@ -160,22 +183,6 @@ struct FloatingPanelView<Content: View>: View {
             .buttonStyle(.plain)
             .help(isMaximized ? "Restore" : "Maximize")
 
-            if let onMinimize = onMinimize {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        onMinimize()
-                        isPresented = false
-                        if isMaximized { isMaximized = false }
-                    }
-                }) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Minimize")
-            }
-
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isPresented = false
@@ -211,11 +218,11 @@ struct FloatingPanelView<Content: View>: View {
 }
 
 extension FloatingPanelView {
-    init(title: String, icon: String, isPresented: Binding<Bool>, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
+        self.windowId = windowId
         self._isPresented = isPresented
-        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = 400
         self.idealWidth = 600
@@ -227,11 +234,11 @@ extension FloatingPanelView {
         self._currentHeight = State(initialValue: 400)
     }
 
-    init(title: String, icon: String, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
+        self.windowId = windowId
         self._isPresented = isPresented
-        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = minWidth
         self.idealWidth = idealWidth

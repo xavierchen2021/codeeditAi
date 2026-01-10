@@ -69,6 +69,7 @@ struct MinimizedWindowsBar: View {
                 .frame(maxWidth: .infinity)
                 .background(.ultraThinMaterial)
             }
+            .padding(.bottom, 8)  // 添加底部边距，避免遮挡页面底部内容
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.minimizedWindows.count)
         }
