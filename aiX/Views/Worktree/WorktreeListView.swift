@@ -152,21 +152,16 @@ struct WorktreeListView: View {
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
             }
-        }
-        .navigationTitle(repository.name ?? "Unknown")
-        .toolbar {
+            
+            // 右下角按钮组
             if !zenModeEnabled {
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-                ToolbarItem(placement: .automatic) {
+                HStack(spacing: 8) {
                     Button {
                         showingCreateWorktree = true
                     } label: {
                         Label(String(localized: "worktree.list.add"), systemImage: "plus")
                     }
-                }
-                ToolbarItem(placement: .automatic) {
+                    
                     Button {
                         Task {
                             try? await repositoryManager.scanWorktrees(for: repository)
@@ -176,8 +171,10 @@ struct WorktreeListView: View {
                     }
                     .help("Refresh worktree list")
                 }
+                .padding(16)
             }
         }
+        .navigationTitle(repository.name ?? "Unknown")
         .sheet(isPresented: $showingCreateWorktree) {
             WorktreeCreateSheet(
                 repository: repository,

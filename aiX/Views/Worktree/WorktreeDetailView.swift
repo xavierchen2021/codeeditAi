@@ -126,9 +126,7 @@ struct WorktreeDetailView: View {
                 let parts = trimmed.split(separator: "=", maxSplits: 1)
                 if parts.count == 2 {
                     let colorHex = parts[1].trimmingCharacters(in: .whitespaces)
-                    if let color = Color(hex: colorHex) {
-                        return color
-                    }
+                    return Color(hex: colorHex)
                 }
             }
         }

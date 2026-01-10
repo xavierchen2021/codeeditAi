@@ -25,8 +25,6 @@ struct GitGraphRenderer {
                     connections: connections,
                     selectedCommit: selectedCommit
                 )
-            } symbols: {
-                drawSymbols(context: $0)
             }
             .frame(height: CGFloat(commits.count) * 60 + 100)
             .frame(width: CGFloat(getMaxColumn(commits: commits)) * 60 + 100)
@@ -35,7 +33,7 @@ struct GitGraphRenderer {
                 SpatialTapGesture()
                     .onEnded { value in
                         handleTap(
-                            at: value.location3D,
+                            at: value.location,
                             commits: commits,
                             onTap: onTapCommit
                         )
@@ -166,13 +164,13 @@ struct GitGraphRenderer {
 
     /// Handle tap gesture
     private static func handleTap(
-        at location: SIMD3<Float>,
+        at location: CGPoint,
         commits: [GitGraphCommit],
         onTap: (GitGraphCommit) -> Void
     ) {
         let config = GraphConfig()
-        let tapX = CGFloat(location.x)
-        let tapY = CGFloat(location.y)
+        let tapX = location.x
+        let tapY = location.y
 
         for commit in commits {
             let centerX = CGFloat(commit.column) * config.horizontalSpacing + config.padding
@@ -208,7 +206,7 @@ struct GraphConfig {
 /// Color hex extension
 extension Color {
     init(hex: String) {
-        var hexSanitized = hex.trimmingCharacters(in: .init(charactersIn: "#"))
+        let hexSanitized = hex.trimmingCharacters(in: .init(charactersIn: "#"))
         var rgb: UInt64 = 0
 
         Scanner(string: hexSanitized).scanHexInt64(&rgb)
