@@ -15,8 +15,9 @@ struct TabItem: Codable, Identifiable, Equatable, Hashable {
     static let files = TabItem(id: "files", localizedKey: "worktree.session.files", icon: "folder")
     static let browser = TabItem(id: "browser", localizedKey: "worktree.session.browser", icon: "globe")
     static let task = TabItem(id: "task", localizedKey: "worktree.session.task", icon: "checklist")
+    static let git = TabItem(id: "git", localizedKey: "worktree.session.git", icon: "arrow.triangle.branch")
 
-    static let defaultOrder: [TabItem] = [.chat, .terminal, .files, .browser, .task]
+    static let defaultOrder: [TabItem] = [.chat, .terminal, .files, .browser, .task, .git]
 
     static func from(id: String) -> TabItem? {
         defaultOrder.first { $0.id == id }

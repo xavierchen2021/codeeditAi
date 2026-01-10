@@ -208,6 +208,8 @@ struct GeneralSettingsView: View {
     @AppStorage("showFilesTab") private var showFilesTab = true
     @AppStorage("showBrowserTab") private var showBrowserTab = true
     @AppStorage("showTaskTab") private var showTaskTab = true
+    @AppStorage("showGitTab") private var showGitTab = true
+    @AppStorage("showFloatingPanels") private var showFloatingPanels = false
 
     // Toolbar
     @AppStorage("showOpenInApp") private var showOpenInApp = true
@@ -303,6 +305,9 @@ struct GeneralSettingsView: View {
             // MARK: - Layout
 
             Section {
+                Toggle("Show Floating Panels", isOn: $showFloatingPanels)
+                    .help("Show floating panels for Terminal, Files, Browser, and Tasks")
+
                 List {
                     ForEach(tabConfig.tabOrder) { tab in
                         HStack(spacing: 12) {
@@ -416,6 +421,7 @@ struct GeneralSettingsView: View {
         case "files": return $showFilesTab
         case "browser": return $showBrowserTab
         case "task": return $showTaskTab
+        case "git": return $showGitTab
         default: return .constant(true)
         }
     }
@@ -427,6 +433,7 @@ struct GeneralSettingsView: View {
         case "files": return showFilesTab
         case "browser": return showBrowserTab
         case "task": return showTaskTab
+        case "git": return showGitTab
         default: return false
         }
     }

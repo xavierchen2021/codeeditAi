@@ -5,6 +5,7 @@ struct FloatingPanelView<Content: View>: View {
     let icon: String
     @ViewBuilder let content: Content
     @Binding var isPresented: Bool
+    var onMinimize: (() -> Void)?
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset = CGSize.zero
@@ -159,6 +160,22 @@ struct FloatingPanelView<Content: View>: View {
             .buttonStyle(.plain)
             .help(isMaximized ? "Restore" : "Maximize")
 
+            if let onMinimize = onMinimize {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        onMinimize()
+                        isPresented = false
+                        if isMaximized { isMaximized = false }
+                    }
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Minimize")
+            }
+
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isPresented = false
@@ -194,10 +211,11 @@ struct FloatingPanelView<Content: View>: View {
 }
 
 extension FloatingPanelView {
-    init(title: String, icon: String, isPresented: Binding<Bool>, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, isPresented: Binding<Bool>, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self._isPresented = isPresented
+        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = 400
         self.idealWidth = 600
@@ -209,10 +227,11 @@ extension FloatingPanelView {
         self._currentHeight = State(initialValue: 400)
     }
 
-    init(title: String, icon: String, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self._isPresented = isPresented
+        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = minWidth
         self.idealWidth = idealWidth
