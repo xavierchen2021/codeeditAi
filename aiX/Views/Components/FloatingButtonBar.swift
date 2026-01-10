@@ -12,6 +12,7 @@ struct FloatingButtonBar: View {
     let buttons: [FloatingButton]
     @Binding var selectedIndex: Int?
     @Binding var activeStates: [Int]  // 活动窗口的索引列表
+    @Binding var minimizedStates: [Int]  // 最小化窗口的索引列表
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset: CGSize = .zero
@@ -46,6 +47,7 @@ struct FloatingButtonBar: View {
                     title: button.title,
                     isSelected: selectedIndex == index,
                     isActive: activeStates.contains(index),
+                    isMinimized: minimizedStates.contains(index),
                     action: {
                         selectedIndex = index
                         button.action()
@@ -95,6 +97,7 @@ struct FloatingBarButton: View {
     let title: String
     let isSelected: Bool
     let isActive: Bool  // 窗口是否处于活动状态（打开）
+    let isMinimized: Bool  // 窗口是否被最小化
     let action: () -> Void
 
     private let buttonSize: CGFloat = 44
@@ -113,8 +116,8 @@ struct FloatingBarButton: View {
                     .foregroundStyle(isSelected ? .blue : (isActive ? .primary : .secondary))
                     .frame(width: buttonSize, height: buttonSize)
 
-                // 活动窗口指示器（小圆点）
-                if isActive {
+                // 活动窗口指示器（小圆点）- 最小化时显示蓝色点
+                if isActive || isMinimized {
                     Circle()
                         .fill(.blue)
                         .frame(width: 6, height: 6)
@@ -123,7 +126,7 @@ struct FloatingBarButton: View {
             }
         }
         .buttonStyle(.plain)
-        .help(isActive ? "\(title) (点击最小化)" : "\(title) (点击展开)")
+        .help(isMinimized ? "\(title) (点击恢复)" : (isActive ? "\(title) (点击最小化)" : "\(title) (点击展开)"))
     }
 }
 
@@ -146,7 +149,8 @@ struct FloatingButton {
                 FloatingButton(icon: "globe", title: "Browser") {}
             ],
             selectedIndex: .constant(nil),
-            activeStates: .constant([1, 2])
+            activeStates: .constant([1, 2]),
+            minimizedStates: .constant([])
         )
     }
 }

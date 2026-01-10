@@ -6,6 +6,7 @@ struct FloatingPanelView<Content: View>: View {
     let windowId: String  // 窗口唯一标识符，用于独立存储位置
     @ViewBuilder let content: Content
     @Binding var isPresented: Bool
+    var onMinimize: (() -> Void)? = nil  // 最小化回调
 
     @State private var currentPosition: CGPoint = .zero
     @State private var dragOffset = CGSize.zero
@@ -122,38 +123,6 @@ struct FloatingPanelView<Content: View>: View {
                     loadSavedPosition()
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                if !isMaximized {
-                    ZStack {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(width: 22, height: 22)
-                    .padding(8)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 1)
-                            .onChanged { value in
-                                if !isResizing {
-                                    resizingStartSize = CGSize(width: currentWidth, height: currentHeight)
-                                    isResizing = true
-                                }
-                                let newW = resizingStartSize.width + value.translation.width
-                                let newH = resizingStartSize.height + value.translation.height
-                                currentWidth = clampWidth(newW)
-                                currentHeight = clampHeight(newH)
-                            }
-                            .onEnded { _ in
-                                isResizing = false
-                                saveSize()
-                            }
-                    )
-                    .onHover { hovering in
-                        if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.arrow.pop() }
-                    }
-                }
-            }
             .onChange(of: isPresented) { presented in
                 if !presented { saveSize() }
             }
@@ -174,6 +143,18 @@ struct FloatingPanelView<Content: View>: View {
             }
 
             Spacer()
+
+            if let onMinimize = onMinimize {
+                Button(action: {
+                    onMinimize()
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Minimize")
+            }
 
             Button(action: { toggleMaximize() }) {
                 Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -218,11 +199,12 @@ struct FloatingPanelView<Content: View>: View {
 }
 
 extension FloatingPanelView {
-    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.windowId = windowId
         self._isPresented = isPresented
+        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = 400
         self.idealWidth = 600
@@ -234,11 +216,12 @@ extension FloatingPanelView {
         self._currentHeight = State(initialValue: 400)
     }
 
-    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String, windowId: String = UUID().uuidString, isPresented: Binding<Bool>, minWidth: CGFloat, idealWidth: CGFloat, maxWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat, maxHeight: CGFloat, onMinimize: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.windowId = windowId
         self._isPresented = isPresented
+        self.onMinimize = onMinimize
         self.content = content()
         self.minWidth = minWidth
         self.idealWidth = idealWidth

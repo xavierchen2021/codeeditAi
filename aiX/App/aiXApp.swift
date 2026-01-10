@@ -40,6 +40,20 @@ class AizenAppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Synchronously close all agent sessions to ensure child processes are terminated
+        ChatSessionManager.shared.closeAllSessionsSync()
+
+        // Attempt to kill any tmux sessions created by the app (wait briefly)
+        let group = DispatchGroup()
+        group.enter()
+        Task {
+            await TmuxSessionManager.shared.killAllAizenSessions()
+            group.leave()
+        }
+        _ = group.wait(timeout: .now() + 2.0)
+    }
 }
 
 @main

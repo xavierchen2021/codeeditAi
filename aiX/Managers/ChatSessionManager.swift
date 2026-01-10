@@ -78,6 +78,37 @@ class ChatSessionManager: ObservableObject {
         sessionOrder.removeAll { $0 == chatSessionId }
     }
 
+    /// Synchronously close all active agent sessions and wait up to `timeout` seconds.
+    /// This is intended to be called from application termination handlers to ensure
+    /// child processes (agents/terminals) are terminated before the app exits.
+    func closeAllSessionsSync(timeout: TimeInterval = 2.0) {
+        let ids = Array(agentSessions.keys)
+        let group = DispatchGroup()
+
+        for id in ids {
+            if let session = agentSessions[id] {
+                group.enter()
+                Task {
+                    await session.close()
+                    group.leave()
+                }
+            }
+        }
+
+        // Wait for closures (with timeout) so we don't block indefinitely on shutdown
+        _ = group.wait(timeout: .now() + timeout)
+
+        // Clean up remaining state synchronously
+        for id in ids {
+            permissionObservers[id]?.cancel()
+            permissionObservers.removeValue(forKey: id)
+            sessionsWithPendingPermissions.remove(id)
+            agentSessions.removeValue(forKey: id)
+            sessionOrder.removeAll { $0 == id }
+            cleanupPendingData(for: id)
+        }
+    }
+
     /// Check if a session has a pending permission request
     func hasPendingPermission(for chatSessionId: UUID) -> Bool {
         sessionsWithPendingPermissions.contains(chatSessionId)

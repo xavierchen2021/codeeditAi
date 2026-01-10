@@ -53,6 +53,8 @@ struct WorktreeDetailView: View {
     @State private var showTaskPanel = false
     @State private var showGitPanel = false
     @State private var selectedFloatingButton: Int?
+    // 最小化窗口的 ID 列表
+    @State private var minimizedPanelIds: Set<String> = []
 
     init(worktree: Worktree, repositoryManager: RepositoryManager, tabStateManager: WorktreeTabStateManager, gitChangesContext: Binding<GitChangesContext?>, onWorktreeDeleted: ((Worktree?) -> Void)? = nil) {
         self.worktree = worktree
@@ -168,7 +170,17 @@ struct WorktreeDetailView: View {
                         Button {
                             handleTabTap(tabId: tab.id)
                         } label: {
-                            Image(systemName: tab.icon)
+                            ZStack {
+                                Image(systemName: tab.icon)
+                                
+                                // 活动窗口指示器（蓝点）
+                                if isTabActive(tab.id) {
+                                    Circle()
+                                        .fill(.blue)
+                                        .frame(width: 5, height: 5)
+                                        .offset(x: 8, y: -8)
+                                }
+                            }
                         }
                         .labelStyle(.iconOnly)
                         .help(LocalizedStringKey(tab.localizedKey))
@@ -179,36 +191,16 @@ struct WorktreeDetailView: View {
     }
 
     private func handleTabTap(tabId: String) {
-        // 点击Tab时打开对应的悬浮窗
+        // 点击Tab时打开对应的悬浮窗，允许同时打开多个窗口
         switch tabId {
         case "files":
             showFilesPanel.toggle()
-            if showFilesPanel {
-                showBrowserPanel = false
-                showTaskPanel = false
-                showGitPanel = false
-            }
         case "browser":
             showBrowserPanel.toggle()
-            if showBrowserPanel {
-                showFilesPanel = false
-                showTaskPanel = false
-                showGitPanel = false
-            }
         case "task":
             showTaskPanel.toggle()
-            if showTaskPanel {
-                showFilesPanel = false
-                showBrowserPanel = false
-                showGitPanel = false
-            }
         case "git":
             showGitPanel.toggle()
-            if showGitPanel {
-                showFilesPanel = false
-                showBrowserPanel = false
-                showTaskPanel = false
-            }
         default:
             // chat 和 terminal 保持原有的切换Tab行为
             selectedTab = tabId
@@ -224,6 +216,22 @@ struct WorktreeDetailView: View {
         case "task": return showTaskTab
         case "git": return showGitTab
         default: return false
+        }
+    }
+
+    private func isTabActive(_ tabId: String) -> Bool {
+        // 判断Tab是否有活动的悬浮窗口（显示中或最小化中）
+        switch tabId {
+        case "files":
+            return showFilesPanel || isPanelMinimized(panelType: .files)
+        case "browser":
+            return showBrowserPanel || isPanelMinimized(panelType: .browser)
+        case "task":
+            return showTaskPanel || isPanelMinimized(panelType: .task)
+        case "git":
+            return showGitPanel || isPanelMinimized(panelType: .git)
+        default:
+            return false
         }
     }
 
@@ -482,7 +490,10 @@ struct WorktreeDetailView: View {
                     title: "Files",
                     icon: "folder",
                     windowId: "floating-files-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showFilesPanel
+                    isPresented: $showFilesPanel,
+                    onMinimize: {
+                        minimizePanel(panelType: .files)
+                    }
                 ) {
                     FileTabView(
                         worktree: worktree,
@@ -498,7 +509,10 @@ struct WorktreeDetailView: View {
                     title: "Browser",
                     icon: "globe",
                     windowId: "floating-browser-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showBrowserPanel
+                    isPresented: $showBrowserPanel,
+                    onMinimize: {
+                        minimizePanel(panelType: .browser)
+                    }
                 ) {
                     BrowserTabView(
                         worktree: worktree,
@@ -514,7 +528,10 @@ struct WorktreeDetailView: View {
                     title: "Tasks",
                     icon: "checklist",
                     windowId: "floating-tasks-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showTaskPanel
+                    isPresented: $showTaskPanel,
+                    onMinimize: {
+                        minimizePanel(panelType: .task)
+                    }
                 ) {
                     TasksTabView(worktree: worktree)
                 }
@@ -527,7 +544,10 @@ struct WorktreeDetailView: View {
                     title: "Git",
                     icon: "arrow.triangle.branch",
                     windowId: "floating-git-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showGitPanel
+                    isPresented: $showGitPanel,
+                    onMinimize: {
+                        minimizePanel(panelType: .git)
+                    }
                 ) {
                     let floatingGitContext = GitChangesContext(worktree: worktree, service: gitRepositoryService)
                     GitPanelWindowContent(
@@ -832,25 +852,49 @@ struct WorktreeDetailView: View {
                     icon: "folder",
                     title: "Files"
                 ) {
-                    handleFloatingButtonTap(panelType: .files)
+                    if isPanelMinimized(panelType: .files) {
+                        restorePanel(panelType: .files)
+                    } else if showFilesPanel {
+                        minimizePanel(panelType: .files)
+                    } else {
+                        handleFloatingButtonTap(panelType: .files)
+                    }
                 },
                 FloatingButton(
                     icon: "globe",
                     title: "Browser"
                 ) {
-                    handleFloatingButtonTap(panelType: .browser)
+                    if isPanelMinimized(panelType: .browser) {
+                        restorePanel(panelType: .browser)
+                    } else if showBrowserPanel {
+                        minimizePanel(panelType: .browser)
+                    } else {
+                        handleFloatingButtonTap(panelType: .browser)
+                    }
                 },
                 FloatingButton(
                     icon: "checklist",
                     title: "Tasks"
                 ) {
-                    handleFloatingButtonTap(panelType: .task)
+                    if isPanelMinimized(panelType: .task) {
+                        restorePanel(panelType: .task)
+                    } else if showTaskPanel {
+                        minimizePanel(panelType: .task)
+                    } else {
+                        handleFloatingButtonTap(panelType: .task)
+                    }
                 },
                 FloatingButton(
                     icon: "arrow.triangle.branch",
                     title: "Git"
                 ) {
-                    handleFloatingButtonTap(panelType: .git)
+                    if isPanelMinimized(panelType: .git) {
+                        restorePanel(panelType: .git)
+                    } else if showGitPanel {
+                        minimizePanel(panelType: .git)
+                    } else {
+                        handleFloatingButtonTap(panelType: .git)
+                    }
                 }
             ],
             selectedIndex: Binding<Int?>(
@@ -860,11 +904,23 @@ struct WorktreeDetailView: View {
             activeStates: Binding<[Int]>(
                 get: {
                     var active: [Int] = []
-                    if showFilesPanel { active.append(0) }
-                    if showBrowserPanel { active.append(1) }
-                    if showTaskPanel { active.append(2) }
-                    if showGitPanel { active.append(3) }
+                    // 显示的窗口或最小化的窗口都标记为活动状态
+                    if showFilesPanel || isPanelMinimized(panelType: .files) { active.append(0) }
+                    if showBrowserPanel || isPanelMinimized(panelType: .browser) { active.append(1) }
+                    if showTaskPanel || isPanelMinimized(panelType: .task) { active.append(2) }
+                    if showGitPanel || isPanelMinimized(panelType: .git) { active.append(3) }
                     return active
+                },
+                set: { _ in }
+            ),
+            minimizedStates: Binding<[Int]>(
+                get: {
+                    var minimized: [Int] = []
+                    if isPanelMinimized(panelType: .files) { minimized.append(0) }
+                    if isPanelMinimized(panelType: .browser) { minimized.append(1) }
+                    if isPanelMinimized(panelType: .task) { minimized.append(2) }
+                    if isPanelMinimized(panelType: .git) { minimized.append(3) }
+                    return minimized
                 },
                 set: { _ in }
             )
@@ -892,6 +948,59 @@ struct WorktreeDetailView: View {
                 showGitPanel.toggle()
             }
         }
+    }
+
+    private func minimizePanel(panelType: FloatingPanelType) {
+        let panelId: String
+        switch panelType {
+        case .files: panelId = "floating-files-\(worktree.id?.uuidString ?? "")"
+        case .browser: panelId = "floating-browser-\(worktree.id?.uuidString ?? "")"
+        case .task: panelId = "floating-tasks-\(worktree.id?.uuidString ?? "")"
+        case .git: panelId = "floating-git-\(worktree.id?.uuidString ?? "")"
+        }
+        minimizedPanelIds.insert(panelId)
+
+        // 隐藏面板
+        withAnimation {
+            switch panelType {
+            case .files: showFilesPanel = false
+            case .browser: showBrowserPanel = false
+            case .task: showTaskPanel = false
+            case .git: showGitPanel = false
+            }
+        }
+    }
+
+    private func restorePanel(panelType: FloatingPanelType) {
+        let panelId: String
+        switch panelType {
+        case .files: panelId = "floating-files-\(worktree.id?.uuidString ?? "")"
+        case .browser: panelId = "floating-browser-\(worktree.id?.uuidString ?? "")"
+        case .task: panelId = "floating-tasks-\(worktree.id?.uuidString ?? "")"
+        case .git: panelId = "floating-git-\(worktree.id?.uuidString ?? "")"
+        }
+        minimizedPanelIds.remove(panelId)
+
+        // 显示面板
+        withAnimation {
+            switch panelType {
+            case .files: showFilesPanel = true
+            case .browser: showBrowserPanel = true
+            case .task: showTaskPanel = true
+            case .git: showGitPanel = true
+            }
+        }
+    }
+
+    private func isPanelMinimized(panelType: FloatingPanelType) -> Bool {
+        let panelId: String
+        switch panelType {
+        case .files: panelId = "floating-files-\(worktree.id?.uuidString ?? "")"
+        case .browser: panelId = "floating-browser-\(worktree.id?.uuidString ?? "")"
+        case .task: panelId = "floating-tasks-\(worktree.id?.uuidString ?? "")"
+        case .git: panelId = "floating-git-\(worktree.id?.uuidString ?? "")"
+        }
+        return minimizedPanelIds.contains(panelId)
     }
 }
 

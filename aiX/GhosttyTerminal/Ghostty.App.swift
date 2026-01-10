@@ -165,7 +165,20 @@ extension Ghostty {
                 self?.checkAppearanceSettingChange()
             }
 
+            // Observe application termination so we can cleanup ghostty resources
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.applicationWillTerminate(_:)),
+                name: NSApplication.willTerminateNotification,
+                object: nil
+            )
+
             Ghostty.logger.info("Ghostty app initialized successfully")
+        }
+
+        @objc private func applicationWillTerminate(_ notification: Notification) {
+            // Ensure Ghostty resources are freed when the application is terminating
+            cleanup()
         }
 
         @objc private func systemAppearanceDidChange(_ notification: Notification) {
