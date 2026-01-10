@@ -157,17 +157,47 @@ struct WorktreeDetailView: View {
 
     @ToolbarContentBuilder
     var tabPickerToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .automatic) {
-            Picker(String(localized: "worktree.session.tab"), selection: $selectedTab) {
+        ToolbarItem(placement: .navigation) {
+            HStack(spacing: 4) {
                 ForEach(tabConfig.tabOrder) { tab in
                     if isTabVisible(tab.id) {
-                        Label(LocalizedStringKey(tab.localizedKey), systemImage: tab.icon)
-                            .tag(tab.id)
+                        Button {
+                            handleTabTap(tabId: tab.id)
+                        } label: {
+                            Image(systemName: tab.icon)
+                        }
+                        .labelStyle(.iconOnly)
+                        .help(LocalizedStringKey(tab.localizedKey))
                     }
                 }
             }
-            .pickerStyle(.segmented)
-            .animation(.easeInOut(duration: 0.2), value: selectedTab)
+        }
+    }
+
+    private func handleTabTap(tabId: String) {
+        // 点击Tab时打开对应的悬浮窗
+        switch tabId {
+        case "files":
+            showFilesPanel.toggle()
+            if showFilesPanel {
+                showBrowserPanel = false
+                showTaskPanel = false
+            }
+        case "browser":
+            showBrowserPanel.toggle()
+            if showBrowserPanel {
+                showFilesPanel = false
+                showTaskPanel = false
+            }
+        case "task":
+            showTaskPanel.toggle()
+            if showTaskPanel {
+                showFilesPanel = false
+                showBrowserPanel = false
+            }
+        default:
+            // chat 和 terminal 保持原有的切换Tab行为
+            selectedTab = tabId
         }
     }
 

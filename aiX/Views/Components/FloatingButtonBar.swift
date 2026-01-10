@@ -29,6 +29,14 @@ struct FloatingButtonBar: View {
         }
     }
 
+    private func getDefaultPosition() -> CGPoint {
+        guard let screen = NSScreen.main?.visibleFrame else {
+            return CGPoint(x: 20, y: 20)
+        }
+        // 左侧中间位置
+        return CGPoint(x: 20, y: screen.height / 2)
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             ForEach(Array(buttons.enumerated()), id: \.offset) { index, button in
@@ -46,16 +54,9 @@ struct FloatingButtonBar: View {
         .padding(8)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-        .background(GeometryReader { proxy in
-            Color.clear.onAppear {
-                barSize = proxy.size
-                if currentPosition == .zero { currentPosition = CGPoint(x: 20, y: 20) }
-                loadPosition()
-            }
-        })
-        .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
+        .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 6)
+            DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     dragOffset = value.translation
                 }
@@ -64,8 +65,13 @@ struct FloatingButtonBar: View {
                     currentPosition.y += value.translation.height
 
                     let screen = NSScreen.main?.visibleFrame ?? .zero
-                    let maxX = max(0, screen.width - barSize.width - 40)
-                    let maxY = max(0, screen.height - barSize.height - 40)
+                    // 估算悬浮栏大小：按钮宽度44 + padding 16 * 3 = 68
+                    let estimatedWidth: CGFloat = 68
+                    let estimatedHeight: CGFloat = CGFloat(buttons.count) * 56 + 16
+
+                    let maxX = max(0, screen.width - estimatedWidth)
+                    let maxY = max(0, screen.height - estimatedHeight)
+
                     currentPosition.x = max(0, min(currentPosition.x, maxX))
                     currentPosition.y = max(0, min(currentPosition.y, maxY))
 
@@ -73,6 +79,11 @@ struct FloatingButtonBar: View {
                     savePosition()
                 }
         )
+        .offset(x: currentPosition.x + dragOffset.width, y: currentPosition.y + dragOffset.height)
+        .onAppear {
+            if currentPosition == .zero { currentPosition = getDefaultPosition() }
+            loadPosition()
+        }
     }
 }
 

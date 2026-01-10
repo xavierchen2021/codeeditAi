@@ -15090,13 +15090,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MAIN"
+            "value" : "PRIMARY"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "主分支"
+            "value" : "主工作树"
           }
         }
       }
