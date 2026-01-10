@@ -48,6 +48,7 @@ struct WorktreeDetailView: View {
     @State private var showTerminalPanel = false
     @State private var showFilesPanel = false
     @State private var showBrowserPanel = false
+    @State private var showTaskPanel = false
     @State private var selectedFloatingButton: Int?
 
     init(worktree: Worktree, repositoryManager: RepositoryManager, tabStateManager: WorktreeTabStateManager, gitChangesContext: Binding<GitChangesContext?>, onWorktreeDeleted: ((Worktree?) -> Void)? = nil) {
@@ -457,53 +458,63 @@ struct WorktreeDetailView: View {
                 .zIndex(200)  // 确保悬浮按钮始终显示在最上层
             }
 
-            // 浮窗 - 只在 Chat 标签页时显示
-            if selectedTab == "chat" {
-                // Terminal浮窗
-                if showTerminalPanel {
-                    FloatingPanelView(
-                        title: "Terminal",
-                        icon: "terminal",
-                        isPresented: $showTerminalPanel
-                    ) {
-                        TerminalTabView(
-                            worktree: worktree,
-                            selectedSessionId: $viewModel.selectedTerminalSessionId,
-                            repositoryManager: repositoryManager
-                        )
-                    }
-                    .zIndex(100)
+            // 浮窗 - 在所有标签页都显示
+            // Terminal浮窗
+            if showTerminalPanel {
+                FloatingPanelView(
+                    title: "Terminal",
+                    icon: "terminal",
+                    isPresented: $showTerminalPanel
+                ) {
+                    TerminalTabView(
+                        worktree: worktree,
+                        selectedSessionId: $viewModel.selectedTerminalSessionId,
+                        repositoryManager: repositoryManager
+                    )
                 }
+                .zIndex(100)
+            }
 
-                // Files浮窗
-                if showFilesPanel {
-                    FloatingPanelView(
-                        title: "Files",
-                        icon: "folder",
-                        isPresented: $showFilesPanel
-                    ) {
-                        FileTabView(
-                            worktree: worktree,
-                            fileToOpenFromSearch: $fileToOpenFromSearch
-                        )
-                    }
-                    .zIndex(100)
+            // Files浮窗
+            if showFilesPanel {
+                FloatingPanelView(
+                    title: "Files",
+                    icon: "folder",
+                    isPresented: $showFilesPanel
+                ) {
+                    FileTabView(
+                        worktree: worktree,
+                        fileToOpenFromSearch: $fileToOpenFromSearch
+                    )
                 }
+                .zIndex(100)
+            }
 
-                // Browser浮窗
-                if showBrowserPanel {
-                    FloatingPanelView(
-                        title: "Browser",
-                        icon: "globe",
-                        isPresented: $showBrowserPanel
-                    ) {
-                        BrowserTabView(
-                            worktree: worktree,
-                            selectedSessionId: $viewModel.selectedBrowserSessionId
-                        )
-                    }
-                    .zIndex(100)
+            // Browser浮窗
+            if showBrowserPanel {
+                FloatingPanelView(
+                    title: "Browser",
+                    icon: "globe",
+                    isPresented: $showBrowserPanel
+                ) {
+                    BrowserTabView(
+                        worktree: worktree,
+                        selectedSessionId: $viewModel.selectedBrowserSessionId
+                    )
                 }
+                .zIndex(100)
+            }
+
+            // Tasks浮窗
+            if showTaskPanel {
+                FloatingPanelView(
+                    title: "Tasks",
+                    icon: "checklist",
+                    isPresented: $showTaskPanel
+                ) {
+                    TasksTabView(worktree: worktree)
+                }
+                .zIndex(100)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .fileSearchShortcut)) { _ in
@@ -783,6 +794,7 @@ struct WorktreeDetailView: View {
             if showTerminalPanel { return 0 }
             if showFilesPanel { return 1 }
             if showBrowserPanel { return 2 }
+            if showTaskPanel { return 3 }
             return nil
         }()
 
@@ -805,6 +817,12 @@ struct WorktreeDetailView: View {
                     title: "Browser"
                 ) {
                     handleFloatingButtonTap(panelType: .browser)
+                },
+                FloatingButton(
+                    icon: "checklist",
+                    title: "Tasks"
+                ) {
+                    handleFloatingButtonTap(panelType: .task)
                 }
             ],
             selectedIndex: Binding<Int?>(
@@ -818,14 +836,10 @@ struct WorktreeDetailView: View {
         case terminal
         case files
         case browser
+        case task
     }
 
     private func handleFloatingButtonTap(panelType: FloatingPanelType) {
-        // 如果当前不在 Chat 标签页，先切换到 Chat 标签页
-        if selectedTab != "chat" {
-            selectedTab = "chat"
-        }
-
         // 切换对应的面板状态
         withAnimation {
             switch panelType {
@@ -835,6 +849,7 @@ struct WorktreeDetailView: View {
                     // 关闭其他面板
                     showFilesPanel = false
                     showBrowserPanel = false
+                    showTaskPanel = false
                 }
             case .files:
                 showFilesPanel.toggle()
@@ -842,6 +857,7 @@ struct WorktreeDetailView: View {
                     // 关闭其他面板
                     showTerminalPanel = false
                     showBrowserPanel = false
+                    showTaskPanel = false
                 }
             case .browser:
                 showBrowserPanel.toggle()
@@ -849,6 +865,15 @@ struct WorktreeDetailView: View {
                     // 关闭其他面板
                     showTerminalPanel = false
                     showFilesPanel = false
+                    showTaskPanel = false
+                }
+            case .task:
+                showTaskPanel.toggle()
+                if showTaskPanel {
+                    // 关闭其他面板
+                    showTerminalPanel = false
+                    showFilesPanel = false
+                    showBrowserPanel = false
                 }
             }
         }
