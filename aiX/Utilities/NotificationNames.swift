@@ -43,6 +43,12 @@ extension Notification.Name {
     /// Posted when a file should be opened in the editor (from tool calls, etc.)
     static let openFileInEditor = Notification.Name("OpenFileInEditor")
 
+    /// Posted when a file diff should be shown in the Git changes sidebar
+    static let showFileDiff = Notification.Name("ShowFileDiff")
+
+    /// Posted when a file should be selected in the Git changes view
+    static let selectFileInGitChanges = Notification.Name("SelectFileInGitChanges")
+
     // MARK: - Settings
 
     /// Posted when the Settings view should open the Pro tab

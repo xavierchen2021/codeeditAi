@@ -67,7 +67,13 @@ struct ContentView: View {
                         repository: repository,
                         selectedWorktree: $selectedWorktree,
                         repositoryManager: repositoryManager,
-                        tabStateManager: tabStateManager
+                        tabStateManager: tabStateManager,
+                        onOpenFile: { filePath in
+                            handleOpenFile(filePath)
+                        },
+                        onShowDiff: { filePath in
+                            handleShowDiff(filePath)
+                        }
                     )
                 } else {
                     placeholderView(
@@ -314,6 +320,26 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    // MARK: - File and Diff Handling
+
+    private func handleOpenFile(_ filePath: String) {
+        // Post notification to open file in the Files tab
+        NotificationCenter.default.post(
+            name: .openFileInEditor,
+            object: nil,
+            userInfo: ["path": filePath]
+        )
+    }
+
+    private func handleShowDiff(_ filePath: String) {
+        // Post notification to open Git changes sidebar and show diff for the file
+        NotificationCenter.default.post(
+            name: .showFileDiff,
+            object: nil,
+            userInfo: ["path": filePath]
+        )
     }
 }
 

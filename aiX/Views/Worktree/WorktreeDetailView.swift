@@ -494,9 +494,11 @@ struct WorktreeDetailView: View {
             handleSwitchToChat(notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToChatSession)) { notification in
-            handleSwitchToChatSession(notification)
-        }
-    }
+                        handleSwitchToChatSession(notification)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .showFileDiff)) { notification in
+                        handleShowFileDiff(notification)
+                    }    }
 
     private func navigateToChatSession(_ sessionId: UUID) {
         // Check if this session belongs to current worktree
@@ -524,6 +526,29 @@ struct WorktreeDetailView: View {
         if chatSessions.contains(where: { $0.id == sessionId }) {
             selectedTab = "chat"
             viewModel.selectedChatSessionId = sessionId
+        }
+    }
+
+    private func handleShowFileDiff(_ notification: Notification) {
+        guard let filePath = notification.userInfo?["path"] as? String else {
+            return
+        }
+
+        // Open Git changes sidebar and navigate to the file
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            if gitChangesContext == nil {
+                gitChangesContext = GitChangesContext(worktree: worktree, service: gitRepositoryService)
+            }
+
+            // Post a notification to select the file in the Git changes view
+            // This will be handled by the Git changes view
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NotificationCenter.default.post(
+                    name: .selectFileInGitChanges,
+                    object: nil,
+                    userInfo: ["path": filePath]
+                )
+            }
         }
     }
 

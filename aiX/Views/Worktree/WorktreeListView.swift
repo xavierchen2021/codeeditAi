@@ -12,6 +12,8 @@ struct WorktreeListView: View {
     @Binding var selectedWorktree: Worktree?
     @ObservedObject var repositoryManager: RepositoryManager
     @ObservedObject var tabStateManager: WorktreeTabStateManager
+    var onOpenFile: ((String) -> Void)? = nil
+    var onShowDiff: ((String) -> Void)? = nil
 
     @State private var showingCreateWorktree = false
     @State private var searchText = ""
@@ -136,7 +138,9 @@ struct WorktreeListView: View {
                             repositoryManager: repositoryManager,
                             allWorktrees: worktrees,
                             selectedWorktree: $selectedWorktree,
-                            tabStateManager: tabStateManager
+                            tabStateManager: tabStateManager,
+                            onOpenFile: onOpenFile,
+                            onShowDiff: onShowDiff
                         )
                         .onTapGesture {
                             selectedWorktree = worktree

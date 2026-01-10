@@ -15,11 +15,19 @@ struct WorktreeListItemView: View {
     let allWorktrees: [Worktree]
     @Binding var selectedWorktree: Worktree?
     @ObservedObject var tabStateManager: WorktreeTabStateManager
+    var onOpenFile: ((String) -> Void)? = nil
+    var onShowDiff: ((String) -> Void)? = nil
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "win.aiX.app", category: "WorktreeListItemView")
 
     @AppStorage("defaultTerminalBundleId") private var defaultTerminalBundleId: String?
     @AppStorage("defaultEditorBundleId") private var defaultEditorBundleId: String?
+
+    // Git 状态相关状态
+    @State private var gitStatus: GitStatus = .empty
+    @State private var isLoadingGitStatus = false
+    @State private var showGitChanges = false
+    @State private var selectedChangedFile: String?
 
     private var defaultTerminal: DetectedApp? {
         guard let bundleId = defaultTerminalBundleId else { return nil }
@@ -113,6 +121,28 @@ struct WorktreeListItemView: View {
                     worktree: worktree,
                     tabStateManager: tabStateManager
                 )
+
+                // Git 修改情况显示区域
+                if gitStatus.hasChanges {
+                    GitChangesIndicatorView(
+                        gitStatus: gitStatus,
+                        isExpanded: showGitChanges,
+                        onTap: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showGitChanges.toggle()
+                            }
+                        },
+                        onFileTap: { file in
+                            selectedChangedFile = file
+                            onOpenFile?(file)
+                        },
+                        onShowDiff: { file in
+                            selectedChangedFile = file
+                            onShowDiff?(file)
+                        }
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
 
             Spacer()
@@ -454,6 +484,7 @@ struct WorktreeListItemView: View {
         }
         .onAppear {
             loadWorktreeStatuses()
+            loadGitStatus()
         }
     }
 
@@ -667,5 +698,192 @@ struct WorktreeListItemView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Git Status Loading
+
+    private func loadGitStatus() {
+        guard let worktreePath = worktree.path else { return }
+
+        Task {
+            await MainActor.run {
+                isLoadingGitStatus = true
+            }
+
+            do {
+                let service = GitRepositoryService(worktreePath: worktreePath)
+                await service.reloadStatus(lightweight: true)
+
+                await MainActor.run {
+                    self.gitStatus = service.currentStatus
+                    isLoadingGitStatus = false
+                }
+            } catch {
+                logger.error("Failed to load git status: \(error.localizedDescription)")
+                await MainActor.run {
+                    isLoadingGitStatus = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Git Changes Indicator View
+
+struct GitChangesIndicatorView: View {
+    let gitStatus: GitStatus
+    let isExpanded: Bool
+    let onTap: () -> Void
+    let onFileTap: (String) -> Void
+    let onShowDiff: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 折叠/展开指示器
+            Button(action: onTap) {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    changesSummary
+
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 0)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // 展开的文件列表
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    changedFilesList
+                }
+                .padding(.leading, 14)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var changesSummary: some View {
+        HStack(spacing: 6) {
+            if gitStatus.additions > 0 {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.green)
+                Text("\(gitStatus.additions)")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+
+            if gitStatus.deletions > 0 {
+                Image(systemName: "minus.circle.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.red)
+                Text("\(gitStatus.deletions)")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+
+            if !gitStatus.untrackedFiles.isEmpty {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.orange)
+                Text("\(gitStatus.untrackedFiles.count)")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var changedFilesList: some View {
+        if gitStatus.stagedFiles.isEmpty &&
+           gitStatus.modifiedFiles.isEmpty &&
+           gitStatus.untrackedFiles.isEmpty {
+            Text("worktree.git.noChanges")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        } else {
+            // Staged files
+            if !gitStatus.stagedFiles.isEmpty {
+                fileSection(
+                    title: "worktree.git.staged",
+                    icon: "checkmark.circle.fill",
+                    color: .green,
+                    files: gitStatus.stagedFiles
+                )
+            }
+
+            // Modified files
+            if !gitStatus.modifiedFiles.isEmpty {
+                fileSection(
+                    title: "worktree.git.modified",
+                    icon: "pencil.circle.fill",
+                    color: .orange,
+                    files: gitStatus.modifiedFiles
+                )
+            }
+
+            // Untracked files
+            if !gitStatus.untrackedFiles.isEmpty {
+                fileSection(
+                    title: "worktree.git.untracked",
+                    icon: "questionmark.circle.fill",
+                    color: .orange,
+                    files: gitStatus.untrackedFiles
+                )
+            }
+        }
+    }
+
+    private func fileSection(title: String, icon: String, color: Color, files: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            ForEach(files, id: \.self) { file in
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .font(.system(size: 7))
+                        .foregroundStyle(color)
+                        .frame(width: 10)
+
+                    Text(fileName(from: file))
+                        .font(.caption2)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    // Diff 按钮
+                    Button {
+                        onShowDiff(file)
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("View diff")
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(3)
+                .onTapGesture {
+                    onFileTap(file)
+                }
+            }
+        }
+        .frame(maxHeight: 150)
+    }
+
+    private func fileName(from path: String) -> String {
+        URL(fileURLWithPath: path).lastPathComponent
     }
 }
