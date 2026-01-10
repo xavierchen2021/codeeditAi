@@ -225,6 +225,9 @@ struct FloatingPanelView<Content: View>: View {
         }
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
+        .onTapGesture {
+            onActivate?()
+        }
     }
 
     private func toggleMaximize() {
