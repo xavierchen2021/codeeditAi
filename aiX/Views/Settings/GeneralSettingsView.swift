@@ -209,6 +209,7 @@ struct GeneralSettingsView: View {
     @AppStorage("showBrowserTab") private var showBrowserTab = true
     @AppStorage("showTaskTab") private var showTaskTab = true
     @AppStorage("showGitTab") private var showGitTab = true
+    @AppStorage("showGitGraphTab") private var showGitGraphTab = true
     @AppStorage("showFloatingPanels") private var showFloatingPanels = false
 
     // Toolbar
@@ -368,6 +369,9 @@ struct GeneralSettingsView: View {
 
                 Toggle("Xcode Build", isOn: $showXcodeBuild)
                     .help("Show Xcode build button for projects with .xcodeproj or .xcworkspace")
+
+                Toggle("Git Graph", isOn: $showGitGraphTab)
+                    .help("Show the Git subway graph tab in the Git panel")
             }
 
             // MARK: - Advanced

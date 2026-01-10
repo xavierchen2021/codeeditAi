@@ -97,6 +97,8 @@ struct GitPanelWindowContentWithToolbar: View {
 
     @ObservedObject private var gitRepositoryService: GitRepositoryService
 
+    @AppStorage("showGitGraphTab") private var showGitGraphTab = true
+
     private let gitHostingService = GitHostingService()
 
     private var worktree: Worktree { context.worktree }
@@ -159,7 +161,9 @@ struct GitPanelWindowContentWithToolbar: View {
             ToolbarItem(placement: .navigation) {
                 Picker("", selection: $selectedTab) {
                     Label(GitPanelTab.history.displayName, systemImage: GitPanelTab.history.icon).tag(GitPanelTab.history)
-                    Label(GitPanelTab.graph.displayName, systemImage: GitPanelTab.graph.icon).tag(GitPanelTab.graph)
+                    if showGitGraphTab {
+                        Label(GitPanelTab.graph.displayName, systemImage: GitPanelTab.graph.icon).tag(GitPanelTab.graph)
+                    }
                     Label(GitPanelTab.prs.displayName, systemImage: GitPanelTab.prs.icon).tag(GitPanelTab.prs)
                     Label(GitPanelTab.workflows.displayName, systemImage: GitPanelTab.workflows.icon).tag(GitPanelTab.workflows)
                 }
