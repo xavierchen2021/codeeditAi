@@ -312,7 +312,10 @@ class GitRepositoryService: ObservableObject {
                     do {
                         try await remoteService.push(at: worktreePath, setUpstream: setUpstream)
                         self.logger.info("fetchThenPush: push completed")
-                        await self.reloadStatusInternal()
+                        // Reload status in background without blocking
+                        Task.detached { [weak self] in
+                            await self?.reloadStatusInternal()
+                        }
                         await MainActor.run { onSuccess?(true) }
                     } catch {
                         self.logger.error("fetchThenPush: push failed - \(error.localizedDescription)")

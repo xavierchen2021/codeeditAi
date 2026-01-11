@@ -160,6 +160,12 @@ class GitOperationHandler {
         gitService.fetch(
             onSuccess: nil,
             onError: { [logger] error in
+                let errorMessage = error.localizedDescription
+                if errorMessage.contains("timed out") {
+                    ToastManager.shared.show("Fetch timed out - check your network connection", type: .error, duration: 5.0)
+                } else {
+                    ToastManager.shared.show("Fetch failed: \(errorMessage)", type: .error, duration: 5.0)
+                }
                 logger.error("Failed to fetch changes: \(error)")
             }
         )
@@ -169,6 +175,12 @@ class GitOperationHandler {
         gitService.pull(
             onSuccess: nil,
             onError: { [logger] error in
+                let errorMessage = error.localizedDescription
+                if errorMessage.contains("timed out") {
+                    ToastManager.shared.show("Pull timed out - check your network connection", type: .error, duration: 5.0)
+                } else {
+                    ToastManager.shared.show("Pull failed: \(errorMessage)", type: .error, duration: 5.0)
+                }
                 logger.error("Failed to pull changes: \(error)")
             }
         )
@@ -182,12 +194,22 @@ class GitOperationHandler {
             onSuccess: { [self] didPush in
                 if didPush {
                     self.logger.info("Push completed successfully")
+                    ToastManager.shared.show("Push completed successfully", type: .success)
                 } else {
                     self.logger.warning("Push skipped - remote has commits ahead, pull required")
+                    ToastManager.shared.show("Push skipped - pull required first", type: .info)
                 }
             },
-            onError: { [self] error in
-                self.logger.error("Push operation failed: \(error.localizedDescription)")
+            onError: { [self, logger] error in
+                let errorMessage = error.localizedDescription
+                if errorMessage.contains("timed out") {
+                    ToastManager.shared.show("Push timed out - check your network connection", type: .error, duration: 5.0)
+                } else if errorMessage.contains("authentication") {
+                    ToastManager.shared.show("Authentication failed - check your credentials", type: .error, duration: 5.0)
+                } else {
+                    ToastManager.shared.show("Push failed: \(errorMessage)", type: .error, duration: 5.0)
+                }
+                logger.error("Push operation failed: \(error.localizedDescription)")
             }
         )
     }
