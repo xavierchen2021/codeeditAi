@@ -92,9 +92,21 @@ struct GitStatusView: View {
     let additions: Int
     let deletions: Int
     let untrackedFiles: Int
+    let stagedFiles: Int
 
     var body: some View {
         HStack(spacing: 8) {
+            if stagedFiles > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                    Text("\(stagedFiles)")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(.blue)
+                .transition(.opacity)
+            }
+
             if additions > 0 {
                 Text("+\(additions)")
                     .font(.system(size: 11, weight: .medium))
@@ -121,6 +133,7 @@ struct GitStatusView: View {
             }
         }
         .padding(.horizontal, 8)
+        .animation(.easeInOut(duration: 0.2), value: stagedFiles)
         .animation(.easeInOut(duration: 0.2), value: additions)
         .animation(.easeInOut(duration: 0.2), value: deletions)
         .animation(.easeInOut(duration: 0.2), value: untrackedFiles)

@@ -408,9 +408,10 @@ struct WorktreeDetailView: View {
         let view = GitStatusView(
             additions: gitRepositoryService.currentStatus.additions,
             deletions: gitRepositoryService.currentStatus.deletions,
-            untrackedFiles: gitRepositoryService.currentStatus.untrackedFiles.count
+            untrackedFiles: gitRepositoryService.currentStatus.untrackedFiles.count,
+            stagedFiles: gitRepositoryService.currentStatus.stagedFiles.count
         )
-        
+
         if #available(macOS 14.0, *) {
             view.symbolEffect(.pulse, options: .repeating, value: hasGitChanges)
         } else {
