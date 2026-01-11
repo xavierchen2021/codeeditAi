@@ -227,14 +227,21 @@ class FileBrowserViewModel: ObservableObject {
         // Load file content
         let fileURL = URL(fileURLWithPath: path)
         let maxOpenFileBytes = 5 * 1024 * 1024
-        if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
-           size > maxOpenFileBytes {
+
+        // Check file size asynchronously
+        let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if let size = size, size > maxOpenFileBytes {
             let mb = Double(size) / 1024.0 / 1024.0
             ToastManager.shared.show(String(format: "File too large to open (%.1f MB). Open in external editor.", mb), type: .info)
             return
         }
 
-        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        // Read file content asynchronously in background
+        let content: String? = try? await Task.detached {
+            try String(contentsOf: fileURL, encoding: .utf8)
+        }.value
+
+        guard let content = content else {
             ToastManager.shared.show("Unable to open file (not UTF-8 text).", type: .info)
             return
         }
@@ -556,17 +563,19 @@ class FileBrowserViewModel: ObservableObject {
         guard !pathsToCheck.isEmpty else { return }
 
         // Process in batches to avoid argument list too long error
-        let batchSize = 100
+        // Reduced batch size from 100 to 50 for better responsiveness
+        let batchSize = 50
         for batchStart in stride(from: 0, to: pathsToCheck.count, by: batchSize) {
             let batchEnd = min(batchStart + batchSize, pathsToCheck.count)
             let batch = Array(pathsToCheck[batchStart..<batchEnd])
 
-            // Use git check-ignore command with async execution (non-blocking)
+            // Use git check-ignore command with async execution and timeout
             do {
                 let result = try await ProcessExecutor.shared.executeWithOutput(
                     executable: "/usr/bin/git",
                     arguments: ["check-ignore"] + batch,
-                    workingDirectory: basePath
+                    workingDirectory: basePath,
+                    timeout: 10.0 // 10 second timeout per batch
                 )
 
                 // git check-ignore returns exit code 1 when no files are ignored, which is fine
@@ -578,8 +587,12 @@ class FileBrowserViewModel: ObservableObject {
                         ignoredPaths.insert(absolutePath)
                     }
                 }
+            } catch ProcessExecutorError.timeout {
+                logger.warning("git check-ignore timeout for batch starting at \(batchStart)")
+                // Continue with next batch instead of failing completely
             } catch {
                 logger.debug("git check-ignore: \(error.localizedDescription)")
+                // Continue with next batch instead of failing completely
             }
         }
 

@@ -363,11 +363,48 @@ struct ContentView: View {
     // MARK: - File and Diff Handling
 
     private func handleOpenFile(_ filePath: String) {
-        NotificationCenter.default.post(
-            name: .openFileInEditor,
-            object: nil,
-            userInfo: ["path": filePath]
-        )
+        // 检查文件是否属于当前工作树
+        if let currentWorktree = selectedWorktree,
+           let currentWorktreePath = currentWorktree.path,
+           filePath.hasPrefix(currentWorktreePath) {
+            // 文件属于当前工作树，直接打开
+            NotificationCenter.default.post(
+                name: .openFileInEditor,
+                object: nil,
+                userInfo: ["path": filePath]
+            )
+        } else {
+            // 文件不属于当前工作树，需要找到对应的工作树并切换
+            findAndSwitchToWorktree(for: filePath) { worktree in
+                // 切换到对应工作树后再打开文件
+                selectedWorktree = worktree
+                // 等待工作树切换完成后打开文件
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(
+                        name: .openFileInEditor,
+                        object: nil,
+                        userInfo: ["path": filePath]
+                    )
+                }
+            }
+        }
+    }
+
+    private func findAndSwitchToWorktree(for filePath: String, completion: @escaping (Worktree) -> Void) {
+        // 在所有工作树中查找包含该文件的工作树
+        for workspace in workspaces {
+            let repositories = (workspace.repositories as? Set<Repository>) ?? []
+            for repository in repositories where repository == selectedRepository {
+                let worktrees = (repository.worktrees as? Set<Worktree>) ?? []
+                for worktree in worktrees {
+                    if let worktreePath = worktree.path,
+                       filePath.hasPrefix(worktreePath) {
+                        completion(worktree)
+                        return
+                    }
+                }
+            }
+        }
     }
 
     private func handleShowDiff(_ filePath: String) {

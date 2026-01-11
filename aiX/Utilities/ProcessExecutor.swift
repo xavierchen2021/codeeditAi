@@ -46,7 +46,8 @@ actor ProcessExecutor {
         executable: String,
         arguments: [String] = [],
         environment: [String: String]? = nil,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil,
+        timeout: TimeInterval = 30.0
     ) async throws -> ProcessResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -87,55 +88,88 @@ actor ProcessExecutor {
             dataCollector.appendStderr(data)
         }
 
-        // Run process and wait asynchronously for termination
-        return try await withCheckedThrowingContinuation { continuation in
-            var hasResumed = false
-            let lock = NSLock()
+        // Run process and wait asynchronously for termination with timeout
+        return try await withThrowingTaskGroup(of: ProcessResult?.self) { group in
+            group.addTask {
+                // Wait for process termination
+                try await withCheckedThrowingContinuation { continuation in
+                    var hasResumed = false
+                    let lock = NSLock()
 
-            process.terminationHandler = { [dataCollector] proc in
-                lock.lock()
-                defer { lock.unlock() }
-                guard !hasResumed else { return }
-                hasResumed = true
+                    process.terminationHandler = { [dataCollector] proc in
+                        lock.lock()
+                        defer { lock.unlock() }
+                        guard !hasResumed else { return }
+                        hasResumed = true
 
-                // Clean up handlers
-                stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                stderrPipe.fileHandleForReading.readabilityHandler = nil
+                        // Clean up handlers
+                        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                        stderrPipe.fileHandleForReading.readabilityHandler = nil
 
-                // Read any remaining data
-                let remainingStdout = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let remainingStderr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                        // Read any remaining data
+                        let remainingStdout = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                        let remainingStderr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
 
-                dataCollector.appendStdout(remainingStdout)
-                dataCollector.appendStderr(remainingStderr)
+                        dataCollector.appendStdout(remainingStdout)
+                        dataCollector.appendStderr(remainingStderr)
 
-                let result = ProcessResult(
-                    exitCode: proc.terminationStatus,
-                    stdout: dataCollector.stdoutString,
-                    stderr: dataCollector.stderrString
-                )
+                        let result = ProcessResult(
+                            exitCode: proc.terminationStatus,
+                            stdout: dataCollector.stdoutString,
+                            stderr: dataCollector.stderrString
+                        )
 
-                // Close pipes to release file descriptors
-                try? stdoutPipe.fileHandleForReading.close()
-                try? stderrPipe.fileHandleForReading.close()
+                        // Close pipes to release file descriptors
+                        try? stdoutPipe.fileHandleForReading.close()
+                        try? stderrPipe.fileHandleForReading.close()
 
-                continuation.resume(returning: result)
+                        continuation.resume(returning: result)
+                    }
+
+                    do {
+                        try process.run()
+                    } catch {
+                        lock.lock()
+                        defer { lock.unlock() }
+                        guard !hasResumed else { return }
+                        hasResumed = true
+
+                        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                        stderrPipe.fileHandleForReading.readabilityHandler = nil
+                        try? stdoutPipe.fileHandleForReading.close()
+                        try? stderrPipe.fileHandleForReading.close()
+
+                        continuation.resume(throwing: ProcessExecutorError.executionFailed(error.localizedDescription))
+                    }
+                }
             }
 
-            do {
-                try process.run()
-            } catch {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !hasResumed else { return }
-                hasResumed = true
+            group.addTask {
+                // Wait for timeout
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                return nil
+            }
 
+            // Wait for first task to complete
+            guard let result = try await group.next() else {
+                throw ProcessExecutorError.executionFailed("No result")
+            }
+
+            // Cancel remaining tasks
+            group.cancelAll()
+
+            if let result = result {
+                return result
+            } else {
+                // Timeout occurred, terminate process
+                if process.isRunning {
+                    process.terminate()
+                }
                 stdoutPipe.fileHandleForReading.readabilityHandler = nil
                 stderrPipe.fileHandleForReading.readabilityHandler = nil
                 try? stdoutPipe.fileHandleForReading.close()
                 try? stderrPipe.fileHandleForReading.close()
-
-                continuation.resume(throwing: ProcessExecutorError.executionFailed(error.localizedDescription))
+                throw ProcessExecutorError.timeout
             }
         }
     }
