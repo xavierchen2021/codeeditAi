@@ -149,6 +149,12 @@ struct FileTreeItem: View {
             .onHover { hovering in
                 isHovering = hovering
             }
+            .gesture(
+                TapGesture(count: 2)
+                    .onEnded {
+                        showingDialog = .rename
+                    }
+            )
             .contextMenu {
                 if item.isDirectory {
                     Button("New File...") {
