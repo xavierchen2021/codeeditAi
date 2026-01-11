@@ -306,10 +306,14 @@ struct WorktreeDetailView: View {
     @ToolbarContentBuilder
     var leadingToolbarItems: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            HStack(spacing: 12) {
-                gitGraphButton
-                zenModeButton
-            }
+            gitGraphButton
+        }
+    }
+
+    @ToolbarContentBuilder
+    var zenModeToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .automatic) {
+            zenModeButton
         }
     }
     
@@ -681,6 +685,8 @@ struct WorktreeDetailView: View {
                 leadingToolbarItems
                 
                 tabPickerToolbarItem
+
+                zenModeToolbarItem
 
                 if shouldShowSessionToolbar {
                     sessionToolbarItems
