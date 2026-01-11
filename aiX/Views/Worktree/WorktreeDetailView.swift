@@ -204,7 +204,7 @@ struct WorktreeDetailView: View {
 
     @ToolbarContentBuilder
     var tabPickerToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        ToolbarItem(placement: .automatic) {
             HStack(spacing: 4) {
                 ForEach(tabConfig.tabOrder) { tab in
                     if isTabVisible(tab.id) {
@@ -228,7 +228,7 @@ struct WorktreeDetailView: View {
                     }
                 }
 
-                
+
             }
         }
     }
@@ -305,7 +305,7 @@ struct WorktreeDetailView: View {
 
     @ToolbarContentBuilder
     var leadingToolbarItems: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        ToolbarItem(placement: .automatic) {
             gitGraphButton
         }
     }
@@ -683,11 +683,23 @@ struct WorktreeDetailView: View {
                 cachedTerminalBackgroundColor = getTerminalBackgroundColor()
             }
             .toolbar {
+                zenModeToolbarItem
+
+                ToolbarItem(placement: .automatic) {
+                    Spacer()
+                }
+
                 leadingToolbarItems
-                
+
+                ToolbarItem(placement: .automatic) {
+                    Spacer()
+                }
+
                 tabPickerToolbarItem
 
-                zenModeToolbarItem
+                ToolbarItem(placement: .automatic) {
+                    Spacer()
+                }
 
                 if shouldShowSessionToolbar {
                     sessionToolbarItems
