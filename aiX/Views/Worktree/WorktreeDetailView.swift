@@ -138,7 +138,8 @@ struct WorktreeDetailView: View {
     var hasGitChanges: Bool {
         gitRepositoryService.currentStatus.additions > 0 ||
         gitRepositoryService.currentStatus.deletions > 0 ||
-        gitRepositoryService.currentStatus.untrackedFiles.count > 0
+        gitRepositoryService.currentStatus.untrackedFiles.count > 0 ||
+        gitRepositoryService.currentStatus.stagedFiles.count > 0
     }
 
     private func getTerminalBackgroundColor() -> Color? {
