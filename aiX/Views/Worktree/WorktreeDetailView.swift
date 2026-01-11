@@ -667,6 +667,7 @@ struct WorktreeDetailView: View {
         NavigationStack {
             navigationContent
                 .navigationTitle("")
+                .modifier(ToolbarTitleDisplayModeModifier())
         }
     }
 
@@ -998,6 +999,18 @@ struct WorktreeDetailView: View {
         case .git: panelId = "floating-git-\(worktree.id?.uuidString ?? "")"
         }
         return minimizedPanelIds.contains(panelId)
+    }
+}
+
+// MARK: - Toolbar Title Display Mode Modifier
+
+struct ToolbarTitleDisplayModeModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.toolbarTitleDisplayMode(.inline)
+        } else {
+            content
+        }
     }
 }
 
