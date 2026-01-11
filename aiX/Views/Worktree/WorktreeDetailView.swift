@@ -684,31 +684,11 @@ struct WorktreeDetailView: View {
             }
             .toolbar {
                 zenModeToolbarItem
-
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-
                 leadingToolbarItems
-
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-
                 tabPickerToolbarItem
-
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-
                 if shouldShowSessionToolbar {
                     sessionToolbarItems
                 }
-
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-
                 trailingToolbarItems
             }
             .task(id: worktree.id) {
