@@ -205,7 +205,7 @@ struct FileTab: View {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isCloseHovering ? .primary : .secondary)
+                    .foregroundColor(isCloseHovering ? .red : .secondary)
             }
             .buttonStyle(.plain)
             .frame(width: 16, height: 16)
