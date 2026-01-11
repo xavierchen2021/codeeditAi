@@ -91,6 +91,7 @@ struct GitPanelWindowContentWithToolbar: View {
     @State private var selectedBranchInfo: BranchInfo?
     @State private var showingBranchPicker: Bool = false
     @State private var currentOperation: GitToolbarOperation?
+    @State private var showDiffPanel: Bool = false
 
     // PR/MR state
     @State private var prStatus: PRStatus = .unknown
@@ -141,6 +142,7 @@ struct GitPanelWindowContentWithToolbar: View {
                 context: context,
                 repositoryManager: repositoryManager,
                 selectedTab: $selectedTab,
+                showDiffPanel: $showDiffPanel,
                 onClose: onClose
             )
         }
@@ -181,7 +183,16 @@ struct GitPanelWindowContentWithToolbar: View {
             ToolbarItem(placement: .navigation) {
                 branchSelector
             }
-            
+
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    showDiffPanel.toggle()
+                } label: {
+                    Image(systemName: showDiffPanel ? "sidebar.right.fill" : "sidebar.right")
+                }
+                .help(showDiffPanel ? "隐藏Diff面板" : "显示Diff面板")
+                .buttonStyle(.bordered)
+            }
 
             ToolbarItem(placement: .primaryAction) {
                 prActionButton

@@ -41,27 +41,44 @@ struct WorktreeDetailView: View {
     @State private var gitIndexWatchToken: UUID?
     @State private var gitIndexWatchPath: String?
     @State private var fileSearchWindowController: FileSearchWindowController?
-    @State private var fileToOpenFromSearch: String?
+    @Binding var fileToOpenFromSearch: String?
     @State private var cachedTerminalBackgroundColor: Color?
     @State private var showAgentSelectionSheet = false
 
-    // Tab 页容器大小，用于悬浮窗口的自动大小计算
-    @State private var tabContainerSize: CGSize = .zero
+    // Tab 页容器大小，用于悬浮窗口的自动大小计算（从父视图传入）
+    @Binding var tabContainerSize: CGSize
 
-    // 浮窗状态 - 提升到 WorktreeDetailView 层级，使其在所有标签页都可见
-    @AppStorage("showFloatingPanels") private var showFloatingPanels = false
-    @State private var showTerminalPanel = false
-    @State private var showFilesPanel = false
-    @State private var showBrowserPanel = false
-    @State private var showTaskPanel = false
-    @State private var showGitPanel = false
-    @State private var selectedFloatingButton: Int?
-    // 最小化窗口的 ID 列表
-    @State private var minimizedPanelIds: Set<String> = []
-    // 当前激活的悬浮面板（用于判断点击图标时的行为）
-    @State private var activeFloatingPanel: FloatingPanelType? = nil
+    // 浮窗状态（由上层 ContentView 管理以支持全窗口覆盖）
+    @Binding var showFloatingPanels: Bool
+    @Binding var showTerminalPanel: Bool
+    @Binding var showFilesPanel: Bool
+    @Binding var showBrowserPanel: Bool
+    @Binding var showTaskPanel: Bool
+    @Binding var showGitPanel: Bool
+    @Binding var selectedFloatingButton: Int?
+    // 最小化窗口的 ID 列表（绑定）
+    @Binding var minimizedPanelIds: Set<String>
+    // 当前激活的悬浮面板（用于判断点击图标时的行为，绑定）
+    @Binding var activeFloatingPanel: FloatingPanelType?
 
-    init(worktree: Worktree, repositoryManager: RepositoryManager, tabStateManager: WorktreeTabStateManager, gitChangesContext: Binding<GitChangesContext?>, onWorktreeDeleted: ((Worktree?) -> Void)? = nil) {
+    init(
+        worktree: Worktree,
+        repositoryManager: RepositoryManager,
+        tabStateManager: WorktreeTabStateManager,
+        gitChangesContext: Binding<GitChangesContext?>,
+        tabContainerSize: Binding<CGSize> = .constant(.zero),
+        showFloatingPanels: Binding<Bool> = .constant(false),
+        showTerminalPanel: Binding<Bool> = .constant(false),
+        showFilesPanel: Binding<Bool> = .constant(false),
+        showBrowserPanel: Binding<Bool> = .constant(false),
+        showTaskPanel: Binding<Bool> = .constant(false),
+        showGitPanel: Binding<Bool> = .constant(false),
+        selectedFloatingButton: Binding<Int?> = .constant(nil),
+        minimizedPanelIds: Binding<Set<String>> = .constant([]),
+        activeFloatingPanel: Binding<FloatingPanelType?> = .constant(nil),
+        fileToOpenFromSearch: Binding<String?> = .constant(nil),
+        onWorktreeDeleted: ((Worktree?) -> Void)? = nil
+    ) {
         self.worktree = worktree
         self.repositoryManager = repositoryManager
         self.tabStateManager = tabStateManager
@@ -69,6 +86,19 @@ struct WorktreeDetailView: View {
         self.onWorktreeDeleted = onWorktreeDeleted
         _viewModel = StateObject(wrappedValue: WorktreeViewModel(worktree: worktree, repositoryManager: repositoryManager))
         _gitRepositoryService = StateObject(wrappedValue: GitRepositoryService(worktreePath: worktree.path ?? ""))
+
+        // Bindings
+        self._tabContainerSize = tabContainerSize
+        self._showFloatingPanels = showFloatingPanels
+        self._showTerminalPanel = showTerminalPanel
+        self._showFilesPanel = showFilesPanel
+        self._showBrowserPanel = showBrowserPanel
+        self._showTaskPanel = showTaskPanel
+        self._showGitPanel = showGitPanel
+        self._selectedFloatingButton = selectedFloatingButton
+        self._minimizedPanelIds = minimizedPanelIds
+        self._activeFloatingPanel = activeFloatingPanel
+        self._fileToOpenFromSearch = fileToOpenFromSearch
     }
 
     // MARK: - Helper Managers
@@ -515,102 +545,7 @@ struct WorktreeDetailView: View {
                 .zIndex(200)  // 确保悬浮按钮始终显示在最上层
             }
 
-            // 浮窗 - 在所有标签页都显示
-            // Files浮窗
-            if showFilesPanel {
-                FloatingPanelView(
-                    title: "Files",
-                    icon: "folder",
-                    windowId: "floating-files-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showFilesPanel,
-                    onMinimize: {
-                        minimizePanel(panelType: .files)
-                    },
-                    onActivate: {
-                        activeFloatingPanel = .files
-                    },
-                    tabContainerSize: tabContainerSize
-                ) {
-                    FileTabView(
-                        worktree: worktree,
-                        fileToOpenFromSearch: $fileToOpenFromSearch
-                    )
-                }
-                .zIndex(activeFloatingPanel == .files ? 150 : 100)
-            }
 
-            // Browser浮窗
-            if showBrowserPanel {
-                FloatingPanelView(
-                    title: "Browser",
-                    icon: "globe",
-                    windowId: "floating-browser-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showBrowserPanel,
-                    onMinimize: {
-                        minimizePanel(panelType: .browser)
-                    },
-                    onActivate: {
-                        activeFloatingPanel = .browser
-                    },
-                    tabContainerSize: tabContainerSize
-                ) {
-                    BrowserTabView(
-                        worktree: worktree,
-                        selectedSessionId: $viewModel.selectedBrowserSessionId
-                    )
-                }
-                .zIndex(activeFloatingPanel == .browser ? 150 : 100)
-            }
-
-            // Tasks浮窗
-            if showTaskPanel {
-                FloatingPanelView(
-                    title: "Tasks",
-                    icon: "checklist",
-                    windowId: "floating-tasks-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showTaskPanel,
-                    onMinimize: {
-                        minimizePanel(panelType: .task)
-                    },
-                    onActivate: {
-                        activeFloatingPanel = .task
-                    },
-                    tabContainerSize: tabContainerSize
-                ) {
-                    TasksTabView(worktree: worktree)
-                }
-                .zIndex(activeFloatingPanel == .task ? 150 : 100)
-            }
-
-            // Git浮窗
-            if showGitPanel {
-                FloatingPanelView(
-                    title: "Git",
-                    icon: "arrow.triangle.branch",
-                    windowId: "floating-git-\(worktree.id?.uuidString ?? "")",
-                    isPresented: $showGitPanel,
-                    onMinimize: {
-                        minimizePanel(panelType: .git)
-                    },
-                    onActivate: {
-                        activeFloatingPanel = .git
-                    },
-                    tabContainerSize: tabContainerSize
-                ) {
-                    let floatingGitContext = GitChangesContext(worktree: worktree, service: gitRepositoryService)
-                    GitPanelWindowContent(
-                        context: floatingGitContext,
-                        repositoryManager: repositoryManager,
-                        selectedTab: .constant(.git),
-                        onClose: {
-                            showGitPanel = false
-                        }
-                    )
-                }
-                .zIndex(activeFloatingPanel == .git ? 150 : 100)
-            }
-
-            
         }
         .onReceive(NotificationCenter.default.publisher(for: .fileSearchShortcut)) { _ in
             showFileSearch()
@@ -969,13 +904,6 @@ struct WorktreeDetailView: View {
                 set: { _ in }
             )
         )
-    }
-
-    private enum FloatingPanelType {
-        case files
-        case browser
-        case task
-        case git
     }
 
     private func handleFloatingButtonTap(panelType: FloatingPanelType) {

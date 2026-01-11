@@ -43,6 +43,7 @@ struct GitPanelWindowContent: View {
     let context: GitChangesContext
     let repositoryManager: RepositoryManager
     @Binding var selectedTab: GitPanelTab
+    @Binding var showDiffPanel: Bool
     let onClose: () -> Void
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "win.aiX", category: "GitPanelWindow")
@@ -99,14 +100,16 @@ struct GitPanelWindowContent: View {
                 HStack(spacing: 0) {
                     // Left: Tab content
                     leftPanel
-                        .frame(width: leftPanelWidth)
+                        .frame(width: showDiffPanel ? leftPanelWidth : .infinity)
 
-                    // Resizable divider
-                    resizableDivider
+                    if showDiffPanel {
+                        // Resizable divider
+                        resizableDivider
 
-                    // Right: Diff view or Workflow details
-                    rightPanel
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Right: Diff view or Workflow details
+                        rightPanel
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
             }
         }
