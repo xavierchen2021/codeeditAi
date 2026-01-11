@@ -15,19 +15,27 @@ struct GitGraphRenderer {
         commits: [GitGraphCommit],
         connections: [GitGraphConnection],
         selectedCommit: GitGraphCommit?,
+        scale: CGFloat = 1.0,
         onTapCommit: @escaping (GitGraphCommit) -> Void
     ) -> some View {
-        ScrollView([.vertical, .horizontal], showsIndicators: false) {
+        // Estimate canvas size based on computed spacing and counts
+        let maxCol = max(1, getMaxColumn(commits: commits) + 1)
+        let config = GraphConfig(scale: scale, columnCount: maxCol)
+        let width = CGFloat(maxCol) * config.horizontalSpacing + config.padding * 2 + 200 // extra for labels
+        let height = CGFloat(max(1, commits.count)) * config.verticalSpacing + config.padding * 2
+
+        return ScrollView([.vertical, .horizontal], showsIndicators: false) {
             Canvas { context, size in
                 drawSubwayGraph(
                     context: context,
                     commits: commits,
                     connections: connections,
-                    selectedCommit: selectedCommit
+                    selectedCommit: selectedCommit,
+                    scale: scale
                 )
             }
-            .frame(height: CGFloat(commits.count) * 60 + 100)
-            .frame(width: CGFloat(getMaxColumn(commits: commits)) * 60 + 100)
+            .frame(height: height)
+            .frame(width: width)
             .contentShape(Rectangle())
             .gesture(
                 SpatialTapGesture()
@@ -35,6 +43,7 @@ struct GitGraphRenderer {
                         handleTap(
                             at: value.location,
                             commits: commits,
+                            scale: scale,
                             onTap: onTapCommit
                         )
                     }
@@ -47,9 +56,11 @@ struct GitGraphRenderer {
         context: GraphicsContext,
         commits: [GitGraphCommit],
         connections: [GitGraphConnection],
-        selectedCommit: GitGraphCommit?
+        selectedCommit: GitGraphCommit?,
+        scale: CGFloat
     ) {
-        let config = GraphConfig()
+        let maxCol = max(1, getMaxColumn(commits: commits) + 1)
+        let config = GraphConfig(scale: scale, columnCount: maxCol)
 
         // Draw connections (lines)
         for connection in connections {
@@ -99,15 +110,10 @@ struct GitGraphRenderer {
             path.addLine(to: CGPoint(x: endX, y: endY))
         }
 
-        context.stroke(
-            path,
-            with: .color(Color(hex: connection.color)),
-            style: StrokeStyle(
-                lineWidth: 2,
-                lineCap: .round,
-                lineJoin: .round
-            )
-        )
+        // Draw with a soft aura and a vivid core using the branch color
+        let trackColor = Color(hex: connection.color)
+        context.stroke(path, with: .color(trackColor.opacity(0.72)), style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+        context.stroke(path, with: .color(trackColor), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
     }
 
     /// Draw commit node
@@ -121,17 +127,28 @@ struct GitGraphRenderer {
         let centerY = CGFloat(commit.row) * config.verticalSpacing + config.padding
         let isSelected = selectedCommit?.id == commit.id
 
-        // Draw outer circle for selected commit
+        // Draw outer circle / glow for selected commit
         if isSelected {
-            context.fill(
-                Circle().path(in: CGRect(
-                    x: centerX - config.nodeRadius * 1.5,
-                    y: centerY - config.nodeRadius * 1.5,
-                    width: config.nodeRadius * 3,
-                    height: config.nodeRadius * 3
-                )),
-                with: .color(Color.accentColor.opacity(0.3))
+            let outerRect = CGRect(
+                x: centerX - config.nodeRadius * 1.8,
+                y: centerY - config.nodeRadius * 1.8,
+                width: config.nodeRadius * 3.6,
+                height: config.nodeRadius * 3.6
             )
+            context.fill(
+                Circle().path(in: outerRect),
+                with: .color(Color.accentColor.opacity(0.22))
+            )
+
+            // Draw a stroked ring for emphasis
+            var ring = Path()
+            ring.addEllipse(in: CGRect(
+                x: centerX - config.nodeRadius * 1.25,
+                y: centerY - config.nodeRadius * 1.25,
+                width: config.nodeRadius * 2.5,
+                height: config.nodeRadius * 2.5
+            ))
+            context.stroke(ring, with: .color(Color.accentColor), lineWidth: 2)
         }
 
         // Draw commit circle
@@ -155,6 +172,79 @@ struct GitGraphRenderer {
             )),
             with: .color(.white)
         )
+
+        // Always draw a compact label to the right of each node (anchored leading so it starts after the node)
+        let raw = "\(commit.shortHash) - \(commit.message)"
+        let maxLen = 120
+        let labelText = raw.count > maxLen ? String(raw.prefix(maxLen - 3)) + "…" : raw
+        let label = Text(labelText)
+            .font(.system(size: 11))
+            .foregroundColor(isSelected ? .primary : .secondary)
+
+        // Calculate the leading point (just after the node)
+        let leadingX = centerX + config.nodeRadius + 8
+        let leadingPoint = CGPoint(x: leadingX, y: centerY)
+
+        // If selected, draw a subtle rounded background starting at the leading edge
+        if isSelected {
+            let approxWidth = min(520, CGFloat(labelText.count) * 7.2 + 16)
+            let rectHeight: CGFloat = 22
+            let rect = CGRect(
+                x: leadingX - 6,
+                y: centerY - rectHeight / 2,
+                width: approxWidth,
+                height: rectHeight
+            )
+            context.fill(Path(roundedRect: rect, cornerRadius: 6), with: .color(Color.accentColor.opacity(0.12)))
+        }
+
+        // Draw the label starting at leadingPoint (leading anchor)
+        context.draw(label, at: leadingPoint, anchor: .leading)
+
+        // --- Draw branch head pills (if any) ---
+        if !commit.branchNames.isEmpty {
+            var pillX = leadingX
+            let pillHeight: CGFloat = max(16, config.nodeRadius * 1.6)
+            let pillSpacing: CGFloat = 6
+            let maxPillsToShow = 2
+
+            for (i, bname) in commit.branchNames.enumerated() {
+                if i >= maxPillsToShow {
+                    // Draw a "+N" pill for extras
+                    let remaining = commit.branchNames.count - maxPillsToShow + 1
+                    let text = Text("+\(remaining)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white)
+                    let approxWidth = CGFloat(min(120, 10 + 7 * (String(remaining).count))) + 12
+                    let rect = CGRect(x: pillX - 2, y: centerY - config.nodeRadius - pillHeight - 6, width: approxWidth, height: pillHeight)
+                    context.fill(Path(roundedRect: rect, cornerRadius: pillHeight / 2), with: .color(Color(hex: commit.trackColor)))
+                    context.draw(text, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+                    break
+                }
+
+                let text = Text(bname)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white)
+                let approxWidth = CGFloat(min(160, bname.count * 7 + 16))
+                let rect = CGRect(x: pillX - 2, y: centerY - config.nodeRadius - pillHeight - 6, width: approxWidth, height: pillHeight)
+                // Fill with the track color (makes branch pill visually associated)
+                context.fill(Path(roundedRect: rect, cornerRadius: pillHeight / 2), with: .color(Color(hex: commit.trackColor)))
+                context.draw(text, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+
+                pillX += approxWidth + pillSpacing
+            }
+        }
+
+        // --- Draw worktree badge if worktrees point to this commit ---
+        if !commit.worktreeNames.isEmpty {
+            // Draw a small folder emoji badge to indicate one or more worktrees
+            let badge = Text("📁")
+                .font(.system(size: max(12, config.nodeRadius * 1.3)))
+            // Place to the right under the node/label to avoid overlap
+            let badgePoint = CGPoint(x: leadingX + 6, y: centerY + config.nodeRadius + 12)
+            context.draw(badge, at: badgePoint, anchor: .leading)
+        }
+
     }
 
     /// Draw symbols for reuse
@@ -166,9 +256,11 @@ struct GitGraphRenderer {
     private static func handleTap(
         at location: CGPoint,
         commits: [GitGraphCommit],
+        scale: CGFloat,
         onTap: (GitGraphCommit) -> Void
     ) {
-        let config = GraphConfig()
+        let maxCol = max(1, getMaxColumn(commits: commits) + 1)
+        let config = GraphConfig(scale: scale, columnCount: maxCol)
         let tapX = location.x
         let tapY = location.y
 
@@ -180,8 +272,8 @@ struct GitGraphRenderer {
                 pow(tapX - centerX, 2) + pow(tapY - centerY, 2)
             )
 
-            // Check if tap is within node radius
-            if distance <= config.nodeRadius * 1.5 {
+            // Check if tap is within node radius (scaled)
+            if distance <= config.nodeRadius * 1.6 {
                 onTap(commit)
                 return
             }
@@ -196,11 +288,42 @@ struct GitGraphRenderer {
 
 /// Configuration for graph rendering
 struct GraphConfig {
-    let nodeRadius: CGFloat = 8
-    let innerRadius: CGFloat = 4
-    let horizontalSpacing: CGFloat = 60
-    let verticalSpacing: CGFloat = 60
-    let padding: CGFloat = 50
+    // Base sizes (at scale == 1)
+    private let baseNodeRadius: CGFloat = 8
+    private let baseInnerRadius: CGFloat = 4
+    private let baseHorizontalSpacing: CGFloat = 60
+    private let baseVerticalSpacing: CGFloat = 60
+    let padding: CGFloat
+
+    // Computed values
+    let nodeRadius: CGFloat
+    let innerRadius: CGFloat
+    let horizontalSpacing: CGFloat
+    let verticalSpacing: CGFloat
+
+    init(scale: CGFloat = 1.0, columnCount: Int = 1) {
+        // Clamp scale to sensible range
+        let s = min(max(scale, 0.4), 2.5)
+
+        // Compress horizontal spacing when many columns to keep branches closer to master
+        let compressionFactor: CGFloat
+        if columnCount <= 6 {
+            compressionFactor = 1.0
+        } else {
+            // more columns -> compress more, but never below 0.5
+            compressionFactor = max(0.5, 1.0 - CGFloat(columnCount - 6) * 0.03)
+        }
+
+        // final spacing
+        horizontalSpacing = max(28, baseHorizontalSpacing * s * compressionFactor)
+        verticalSpacing = max(40, baseVerticalSpacing * s)
+
+        nodeRadius = max(4, baseNodeRadius * s)
+        innerRadius = max(2, baseInnerRadius * s)
+
+        // padding scales modestly but keep a min
+        padding = max(24, 40 * s)
+    }
 }
 
 /// Color hex extension

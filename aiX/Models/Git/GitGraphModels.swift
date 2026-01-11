@@ -24,12 +24,19 @@ struct GitGraphCommit: Identifiable {
     let column: Int           // Horizontal position (branch track)
     let trackColor: String    // Color for the branch track
 
+    // Annotations: branch heads that point to this commit, and active worktrees
+    let branchNames: [String]
+    let worktreeNames: [String]
+
     /// Display relative date
     var relativeDate: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
+
+    /// Whether this commit is a branch head
+    var isBranchHead: Bool { !branchNames.isEmpty }
 
     init(
         id: String,
@@ -43,7 +50,9 @@ struct GitGraphCommit: Identifiable {
         parentIds: [String] = [],
         row: Int = 0,
         column: Int = 0,
-        trackColor: String = "#007AFF"
+        trackColor: String = "#007AFF",
+        branchNames: [String] = [],
+        worktreeNames: [String] = []
     ) {
         self.id = id
         self.shortHash = shortHash
@@ -57,6 +66,8 @@ struct GitGraphCommit: Identifiable {
         self.row = row
         self.column = column
         self.trackColor = trackColor
+        self.branchNames = branchNames
+        self.worktreeNames = worktreeNames
     }
 }
 

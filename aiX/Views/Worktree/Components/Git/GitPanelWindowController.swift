@@ -34,6 +34,9 @@ class GitPanelWindowController: NSWindowController {
         let repoName = context.worktree.repository?.name ?? "Repository"
         let worktreePath = context.worktree.path ?? ""
         window.title = repoName
+        // Hide the title text (so branch/tag labels are not shown in the window chrome)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 900, height: 600)
 
         self.init(window: window)

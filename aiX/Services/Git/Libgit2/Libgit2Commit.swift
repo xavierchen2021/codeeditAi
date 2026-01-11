@@ -10,6 +10,7 @@ struct Libgit2CommitInfo: Sendable {
     let author: Libgit2Signature
     let committer: Libgit2Signature
     let parentCount: Int
+    let parentIds: [String]
     let time: Date
 }
 
@@ -355,6 +356,18 @@ extension Libgit2Repository {
         // Get parent count
         let parentCount = Int(git_commit_parentcount(commit))
 
+        // Collect parent OIDs as hex strings
+        var parents: [String] = []
+        for i in 0..<parentCount {
+            if let parentOidPtr = git_commit_parent_id(commit, UInt32(i)) {
+                // Convert oid to string
+                var oidStr = [CChar](repeating: 0, count: 41)
+                git_oid_tostr(&oidStr, 41, parentOidPtr)
+                let parentOid = String(cString: oidStr)
+                parents.append(parentOid)
+            }
+        }
+
         // Get time
         let timestamp = git_commit_time(commit)
         let time = Date(timeIntervalSince1970: TimeInterval(timestamp))
@@ -367,6 +380,7 @@ extension Libgit2Repository {
             author: author,
             committer: committer,
             parentCount: parentCount,
+            parentIds: parents,
             time: time
         )
     }

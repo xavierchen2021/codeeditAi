@@ -19,6 +19,7 @@ struct GitGraphView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedGraphCommit: GitGraphCommit?
+    @State private var graphScale: CGFloat = 1.0  // Zoom scale for the graph
 
     private let graphService = GitGraphService()
     private let logger = Logger(
@@ -63,6 +64,7 @@ struct GitGraphView: View {
                     .clipShape(Capsule())
             }
 
+            // Refresh
             Button {
                 Task { await refresh() }
             } label: {
@@ -72,6 +74,40 @@ struct GitGraphView: View {
             .buttonStyle(.plain)
             .help(String(localized: "git.history.refresh"))
             .disabled(isLoading)
+
+            // Zoom controls
+            HStack(spacing: 8) {
+                Button(action: {
+                    withAnimation(.easeInOut) {
+                        graphScale = max(0.5, graphScale - 0.1)
+                    }
+                }) {
+                    Image(systemName: "minus.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .help("Zoom Out")
+
+                Button(action: {
+                    withAnimation(.easeInOut) {
+                        graphScale = 1.0
+                    }
+                }) {
+                    Image(systemName: "scope")
+                }
+                .buttonStyle(.plain)
+                .help("Reset Zoom")
+
+                Button(action: {
+                    withAnimation(.easeInOut) {
+                        graphScale = min(3.0, graphScale + 0.1)
+                    }
+                }) {
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .help("Zoom In")
+            }
+            .padding(.leading, 6)
         }
         .padding(.horizontal, 12)
         .frame(height: 44)
@@ -125,26 +161,84 @@ struct GitGraphView: View {
     }
 
     private var graphContentView: some View {
-        GitGraphRenderer.drawGraph(
-            commits: graphCommits,
-            connections: connections,
-            selectedCommit: selectedGraphCommit,
-            onTapCommit: { commit in
-                selectedGraphCommit = commit
-                // Convert to GitCommit for compatibility
-                let gitCommit = GitCommit(
-                    id: commit.id,
-                    shortHash: commit.shortHash,
-                    message: commit.message,
-                    author: commit.author,
-                    date: commit.date,
-                    filesChanged: commit.filesChanged,
-                    additions: commit.additions,
-                    deletions: commit.deletions
-                )
-                onSelectCommit(gitCommit)
+        VStack(spacing: 0) {
+            // Commit details bar
+            if let selected = selectedGraphCommit {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selected.shortHash)
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        Text(selected.message)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Text(selected.author)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Button(action: {
+                            // Send selection to parent to show diff/details
+                            let gitCommit = GitCommit(
+                                id: selected.id,
+                                shortHash: selected.shortHash,
+                                message: selected.message,
+                                author: selected.author,
+                                date: selected.date,
+                                filesChanged: selected.filesChanged,
+                                additions: selected.additions,
+                                deletions: selected.deletions
+                            )
+                            onSelectCommit(gitCommit)
+                        }) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Show Diff")
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 46)
+                Divider()
             }
-        )
+
+            // Graph canvas with zoom and magnification
+            GitGraphRenderer.drawGraph(
+                commits: graphCommits,
+                connections: connections,
+                selectedCommit: selectedGraphCommit,
+                scale: graphScale,
+                onTapCommit: { commit in
+                    selectedGraphCommit = commit
+                    // Convert to GitCommit for compatibility
+                    let gitCommit = GitCommit(
+                        id: commit.id,
+                        shortHash: commit.shortHash,
+                        message: commit.message,
+                        author: commit.author,
+                        date: commit.date,
+                        filesChanged: commit.filesChanged,
+                        additions: commit.additions,
+                        deletions: commit.deletions
+                    )
+                    onSelectCommit(gitCommit)
+                }
+            )
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        // MagnificationGesture provides scale relative to the gesture start.
+                        // We map the magnification into our graphScale clamps and keep it stable
+                        let clamped = min(max(value, 0.4), 2.5)
+                        graphScale = clamped
+                    }
+            )
+            .animation(.easeInOut, value: graphScale)
+        }
     }
 
     private func loadGraphData() async {

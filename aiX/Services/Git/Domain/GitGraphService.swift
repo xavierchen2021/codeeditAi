@@ -21,8 +21,14 @@ actor GitGraphService {
         // Fetch commit history with parent information
         let commits = try await fetchCommitsWithParents(at: repoPath, limit: limit)
 
-        // Build graph layout
-        let graphCommits = await buildGraphLayout(commits: commits)
+        // Fetch branch heads and worktrees to annotate commits
+        let branchService = GitBranchService()
+        let worktreeService = GitWorktreeService()
+        async let branches = branchService.listBranches(at: repoPath, includeRemote: false)
+        async let worktrees = worktreeService.listWorktrees(at: repoPath)
+
+        // Build graph layout (include branches & worktrees for annotations)
+        let graphCommits = await buildGraphLayout(commits: commits, branches: try await branches, worktrees: try await worktrees)
 
         return graphCommits
     }
@@ -37,92 +43,126 @@ actor GitGraphService {
     }
 
     /// Build graph layout with track assignment
-    private func buildGraphLayout(commits: [Libgit2CommitInfo]) async -> [GitGraphCommit] {
+    private func buildGraphLayout(commits: [Libgit2CommitInfo], branches: [BranchInfo], worktrees: [WorktreeInfo]) async -> [GitGraphCommit] {
         guard !commits.isEmpty else { return [] }
 
         var graphCommits: [GitGraphCommit] = []
-        var trackMap: [String: Int] = [:]  // Branch name -> track index
-        var currentTracks: [Int: String] = [:]  // Track index -> commit id
-        var nextTrackIndex = 0
 
-        // Track colors
-        let trackColors = [
-            GitGraphTrackColor.blue.hexColor,
-            GitGraphTrackColor.green.hexColor,
-            GitGraphTrackColor.purple.hexColor,
-            GitGraphTrackColor.orange.hexColor,
-            GitGraphTrackColor.pink.hexColor,
-            GitGraphTrackColor.cyan.hexColor,
-        ]
-
-        func getTrackColor(for index: Int) -> String {
-            return trackColors[index % trackColors.count]
+        // Build quick lookup maps for branch heads and worktrees
+        var branchMap: [String: [String]] = [:] // shortCommit -> [branchName]
+        for b in branches {
+            if b.commit.isEmpty { continue }
+            branchMap[b.commit, default: []].append(b.name)
         }
 
-        // Process commits in order (already sorted by time, newest first)
+        // Map worktrees by branch name and by commit short id
+        var worktreesByBranch: [String: [WorktreeInfo]] = [:]
+        var worktreesByCommit: [String: [WorktreeInfo]] = [:]
+        for wt in worktrees {
+            worktreesByBranch[wt.branch, default: []].append(wt)
+            if !wt.commit.isEmpty {
+                worktreesByCommit[wt.commit, default: []].append(wt)
+            }
+        }
+
+        // Columns represent active branch tracks (each holds the next expected commit id at that track)
+        var columns: [String?] = []  // element is commit id expected at that column
+
+        func getTrackColor(for index: Int) -> String {
+            return GitGraphTrackColor.color(forIndex: index)
+        }
+
+        // Process commits in displayed order (newest first)
         for (index, commit) in commits.enumerated() {
-            var column = 0
-            var trackColor = getTrackColor(for: 0)
+            // Determine column: if commit is expected in an existing column (its id matches), use it
+            var columnIndex: Int? = columns.firstIndex(where: { $0 == commit.oid })
 
-            // Determine if this commit continues an existing track
-            let parentIds = getParentIds(for: commit)
-            var continuingTrack: Int?
-
-            if parentIds.count == 1 {
-                // Normal commit, try to continue from parent
-                if let parentId = parentIds.first,
-                   let parentTrack = currentTracks.first(where: { $0.value == parentId }) {
-                    continuingTrack = parentTrack.key
+            // If not found, reuse first free column, or append
+            if columnIndex == nil {
+                if let free = columns.firstIndex(where: { $0 == nil }) {
+                    columnIndex = free
+                } else {
+                    columns.append(nil)
+                    columnIndex = columns.count - 1
                 }
-            } else if parentIds.count > 1 {
-                // Merge commit
-                // Find which track has the primary parent
-                continuingTrack = currentTracks.first(where: { $0.value == parentIds.first })?.key
             }
 
-            // Assign track
-            if let trackIndex = continuingTrack {
-                // Continue existing track
-                column = trackIndex
-                trackColor = getTrackColor(for: trackIndex)
-                currentTracks[trackIndex] = commit.oid
+            let column = columnIndex ?? 0
+            let trackColor = getTrackColor(for: column)
+
+            // After placing this commit at column, set that column's expected next commit to the primary parent
+            // Primary parent is first parent if exists
+            let parentIds = commit.parentIds
+            if let primaryParent = parentIds.first {
+                columns[column] = primaryParent
             } else {
-                // New branch - find an available track
-                // Look for the first track that's free
-                var assigned = false
-                for track in 0..<max(3, nextTrackIndex) {
-                    if currentTracks[track] == nil || currentTracks[track] == parentIds.first {
-                        column = track
-                        trackColor = getTrackColor(for: track)
-                        currentTracks[track] = commit.oid
-                        assigned = true
-                        break
+                // No parents (root), free this column
+                columns[column] = nil
+            }
+
+            // For additional parents (merges), ensure they are present in some column so their connections draw across
+            if parentIds.count > 1 {
+                // Helper to allocate a free column nearest to an anchor (prefer closeness to master/current column)
+                func allocateColumn(near anchor: Int) -> Int {
+                    // search radiating outwards from anchor for a free slot
+                    let maxIndex = columns.count - 1
+                    for offset in 0...max(maxIndex, 0) {
+                        let left = anchor - offset
+                        if left >= 0 && columns[left] == nil {
+                            return left
+                        }
+                        let right = anchor + offset
+                        if right <= maxIndex && columns[right] == nil {
+                            return right
+                        }
                     }
+                    // No free slot found - append at end
+                    columns.append(nil)
+                    return columns.count - 1
                 }
 
-                if !assigned {
-                    // Create new track
-                    column = nextTrackIndex
-                    trackColor = getTrackColor(for: nextTrackIndex)
-                    currentTracks[nextTrackIndex] = commit.oid
-                    nextTrackIndex += 1
+                for extraParent in parentIds.dropFirst() {
+                    // If already present do nothing
+                    if columns.contains(where: { $0 == extraParent }) { continue }
+
+                    // Allocate nearest free column to current commit column
+                    let freeIndex = allocateColumn(near: column)
+                    columns[freeIndex] = extraParent
                 }
             }
 
-            // Create graph commit
+            // Determine branch names that point to this commit (branch service provides short commit ids)
+            let branchNames = branchMap[commit.shortOid] ?? []
+
+            // Determine worktrees that match either by commit or by branch name
+            var matchedWorktrees: [WorktreeInfo] = []
+            if let byCommit = worktreesByCommit[commit.shortOid] {
+                matchedWorktrees.append(contentsOf: byCommit)
+            }
+            for bn in branchNames {
+                if let byBranch = worktreesByBranch[bn] {
+                    matchedWorktrees.append(contentsOf: byBranch)
+                }
+            }
+            // Unique names
+            let worktreeNames = Array(Set(matchedWorktrees.map { URL(fileURLWithPath: $0.path).lastPathComponent }))
+
+            // Create graph commit model
             let graphCommit = GitGraphCommit(
                 id: commit.oid,
                 shortHash: commit.shortOid,
                 message: commit.summary,
                 author: commit.author.name,
                 date: commit.time,
-                filesChanged: 0,  // Will be filled later
+                filesChanged: 0,
                 additions: 0,
                 deletions: 0,
                 parentIds: parentIds,
                 row: index,
                 column: column,
-                trackColor: trackColor
+                trackColor: trackColor,
+                branchNames: branchNames,
+                worktreeNames: worktreeNames
             )
 
             graphCommits.append(graphCommit)
@@ -139,14 +179,7 @@ actor GitGraphService {
 
     /// Get parent IDs for a commit
     private func getParentIds(for commit: Libgit2CommitInfo) -> [String] {
-        var parentIds: [String] = []
-
-        // For now, we don't have direct parent IDs in Libgit2CommitInfo
-        // We'll need to enhance the data model or fetch separately
-        // For the initial implementation, we'll use parentCount
-        // In a full implementation, we'd fetch parent OIDs
-
-        return parentIds
+        return commit.parentIds
     }
 
     /// Fetch stats for commits in batch
