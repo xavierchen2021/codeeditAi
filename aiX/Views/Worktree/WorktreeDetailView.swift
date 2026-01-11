@@ -793,6 +793,9 @@ struct WorktreeDetailView: View {
         }
         gitIndexWatchToken = token
         gitIndexWatchPath = worktreePath
+
+        // Immediately reload status to ensure it's displayed on view appear
+        await gitRepositoryService.reloadStatus(lightweight: false)
     }
 
 
